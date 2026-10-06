@@ -78,8 +78,8 @@ async function handle(request: WorkerRequest): Promise<WorkerResponse> {
 
   const notes = parseDeckNotes(request.deckText, request.label);
   const SQL = await sqlJs();
+  // Each note goes into its own deckName's deck (src/apkg/collection.ts).
   const { bytes, unresolvedMedia } = buildApkg(notes, {
-    deckName: request.deckName,
     readMedia: (filename) => request.media.get(filename),
     openSqlite: sqlJsOpener(SQL),
     zipCodec: fflateZipCodec,

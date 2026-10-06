@@ -191,7 +191,7 @@ export function buildMethods(info: SidecarInfo, onShutdown: () => void): Record<
       const path = requireString(params, 'path');
       const notes = loadDeckNotes(path);
       const outPath = optionalString(params, 'outPath') ?? join(dirname(path), `${basename(path, extname(path))}.apkg`);
-      const deckName = optionalString(params, 'deckName') ?? notes[0]?.deckName ?? '';
+      const deckName = optionalString(params, 'deckName'); // overrides every note's own, as anki/send's does
       const mediaDir = optionalString(params, 'mediaDir') ?? resolveMediaDir();
       // Loaded on first use, the way src/cli/index.ts defers its subcommands:
       // the writer reaches node:sqlite, which does not exist below Node 24,

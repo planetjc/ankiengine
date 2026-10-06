@@ -68,11 +68,11 @@ replacement for the AnkiConnect hand-off step, using `src/apkg` instead.
   defaults to `review.html` next to `deck.json`, the same default
   `render_review.py` uses.
 - **`ape export <deck.json> [-o <out.apkg>] [--deck-name <name>] [--media-dir <dir>]`**
-  Writes a real `.apkg` via `src/apkg`'s `writeApkg`. `--deck-name` defaults
-  to the deck's own `notes[0].deckName` (every note must share one deckName;
-  a multi-deck `deck.json` needs one `export` call per deck — the module
-  rejects a mismatch by design, see `src/apkg/collection.ts`). `-o` defaults
-  to `<deck>.apkg` next to `deck.json`.
+  Writes a real `.apkg` via `src/apkg`'s `writeApkg`. Each note goes into
+  the deck its own `deckName` names, so a multi-deck `deck.json` (an exam
+  deck with a subdeck per chapter) is one package; `--deck-name` puts every
+  note into that one deck instead. `-o` defaults to `<deck>.apkg` next to
+  `deck.json`.
 
 `check` and `review` resolve the Anki media directory the same way the two
 Python originals do: the `ANKI_MEDIA` environment variable if set, otherwise
@@ -233,7 +233,7 @@ card count, deck name, notetype, and every field's round-tripped content.
 `test/integration/cli-errors.test.ts` covers the CLI-boundary behavior the
 golden path doesn't: usage errors, a missing file, malformed JSON, a note
 missing `fields.Text`, a deck naming zero notes, a genuinely dirty note,
-`--inventory`/`--transcript` wiring, and an `--deck-name` mismatch. Also
+`--inventory`/`--transcript` wiring, and a `--deck-name` override. Also
 exercised by hand beyond what's automated, including the media-directory
 default-resolution fallback.
 

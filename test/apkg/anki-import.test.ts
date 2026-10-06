@@ -89,6 +89,7 @@ out = {
     "cards": len(col.find_cards('')),
     "ordinals": sorted(sorted(c.ord for c in col.get_note(nid).cards()) for nid in col.find_notes('')),
     "decks": [d.name for d in col.decks.all_names_and_ids()],
+    "cardDecks": sorted(col.decks.name(col.get_card(cid).did) for cid in col.find_cards('')),
     "notetypes": [m.name for m in col.models.all_names_and_ids()],
     "media": sorted(os.listdir(col.media.dir())),
     "extras": sorted(col.get_note(nid)["Extra"] for nid in col.find_notes('')),
@@ -177,4 +178,35 @@ test('real Anki: a re-export of the same deck updates its notes in place -- no s
   assert.deepEqual(result.notetypes.filter((n: string) => n.startsWith('Custom Cloze')), ['Custom Cloze'], 'one Custom Cloze, reused -- not a renamed copy per import');
   assert.ok(result.extras.includes('Corrected on the second export.'), 'the corrected Extra landed on the existing note');
   assert.equal(result.extras.filter((e: string) => e === notes[2]!.fields.Extra).length, 6, 'and replaced the old one: only the six untouched notes keep theirs');
+});
+
+test('real Anki: a deck.json naming a subdeck per chapter imports as one package, each card in its own subdeck', (t) => {
+  const python = findAnkiPython();
+  if (python === null) {
+    t.skip('Anki desktop (or a matching python3.13) not found on this machine; multi-deck import not verified.');
+    return;
+  }
+  // An exam deck the way the method writes one: Course::Test N::<chapter>,
+  // chapters interleaved, and no parent deck named by any note.
+  const tempDir = makeTempDir('anki-multideck');
+  const base = JSON.parse(readFileSync(new URL('../fixtures/reference-cards.json', import.meta.url), 'utf8')).notes as DeckNote[];
+  const chapters = ['Botany::Test 1::Ch 01 Intro', 'Botany::Test 1::Ch 10 Flowers', 'Botany::Test 1::Ch 19 Classification'];
+  const notes = base.map((n, i) => ({ ...n, deckName: chapters[i % 3]! }));
+  const apkgPath = join(tempDir, 'exam.apkg');
+  writeApkg(notes, { outPath: apkgPath, mediaDir: new URL('./fixtures/', import.meta.url).pathname, clock: fixedClock });
+
+  const scriptPath = join(tempDir, 'import_check.py');
+  writeFileSync(scriptPath, IMPORT_SCRIPT);
+  const result = JSON.parse(execFileSync(python, [scriptPath, apkgPath], { encoding: 'utf8' }).trim().split('\n').at(-1)!);
+
+  assert.equal(result.ok, true, `Anki rejected the package: ${result.error}`);
+  assert.equal(result.notes, 7);
+  assert.equal(result.cards, 14);
+  for (const name of ['Botany', 'Botany::Test 1', ...chapters]) {
+    assert.ok(result.decks.includes(name), `deck ${name} should exist after import, got: ${result.decks.join(', ')}`);
+  }
+  // Hand-counted from the fixture's clozes: ref-01/04/07 (2+2+1), ref-02/05 (2+2), ref-03/06 (3+2).
+  const counts: Record<string, number> = {};
+  for (const deck of result.cardDecks as string[]) counts[deck] = (counts[deck] ?? 0) + 1;
+  assert.deepEqual(counts, { [chapters[0]!]: 5, [chapters[1]!]: 4, [chapters[2]!]: 5 });
 });

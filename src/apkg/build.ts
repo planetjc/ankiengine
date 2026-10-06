@@ -18,8 +18,8 @@ import type { OpenSqlite } from './sqlite.js';
 import { buildZip, type ZipCodec, type ZipEntryInput } from './zip.js';
 
 export interface BuildApkgOptions {
-  /** Every note passed to a given call is written into this one deck. */
-  deckName: string;
+  /** Puts every note into this one deck; left out, each note goes into its own deckName's (collection.ts). */
+  deckName?: string;
   /** Bytes behind each referenced media filename -- media.ts. */
   readMedia: MediaReader;
   /** Where the SQLite database comes from -- sqlite.ts. */
@@ -48,8 +48,8 @@ export interface BuildApkgResult {
 const NOTE_FIELD_NAMES: readonly (keyof NoteFields)[] = ['Text', 'Extra', 'Source'];
 
 /**
- * Writes a `.apkg` file containing exactly one deck's worth of notes and
- * cards: schema-11 SQLite (collection.anki21), a JSON media manifest, and
+ * Writes a `.apkg` file containing the notes and cards of every deck they
+ * name: schema-11 SQLite (collection.anki21), a JSON media manifest, and
  * the referenced media files, deflate/store zipped per docs/research/apkg-format.md.
  *
  * A plain (non-`async`) function: every step here -- SQLite writes, media

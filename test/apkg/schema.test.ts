@@ -27,6 +27,7 @@ import {
   fixedClock,
   makeTempDir,
   makeEmptyMediaDir,
+  makeNote,
   extractZipMember,
   openCollection,
 } from './helpers.ts';
@@ -215,6 +216,52 @@ test('col.decks: the built-in Default deck (id 1) is present verbatim, plus one 
   assert.equal(ourDeck.dyn, 0, 'a normal (non-filtered) deck');
   assert.equal(ourDeck.conf, 1, 'reuses the one dconf group rather than minting a new one');
   assert.ok(Number.isInteger(ourDeck.id as number) && (ourDeck.id as number) !== 1);
+});
+
+// An exam deck: one subdeck per chapter, interleaved the way a deck.json
+// built chapter by chapter and then reordered can be.
+const CHAPTERS = ['Botany::Test 1::Ch 01 Intro', 'Botany::Test 1::Ch 10 Flowers', 'Botany::Test 1::Ch 19 Classification'];
+const CHAPTER_NOTES = [
+  makeNote('{{c1::Xylem}} carries water.', { deckName: CHAPTERS[0] }),
+  makeNote('{{c1::Petals}} draw in {{c2::pollinators}}.', { deckName: CHAPTERS[1] }),
+  makeNote('{{c1::Phloem}} carries sugars.', { deckName: CHAPTERS[0] }),
+  makeNote('{{c1::Linnaeus}} named the species.', { deckName: CHAPTERS[2] }),
+];
+
+function exportDecks(notes: DeckNote[], deckName?: string) {
+  const tempDir = makeTempDir('schema-decks');
+  const outPath = join(tempDir, 'out.apkg');
+  writeApkg(notes, { deckName, outPath, mediaDir: makeEmptyMediaDir(tempDir), clock: fixedClock });
+  const db = openCollection(extractZipMember(outPath, 'collection.anki21', tempDir));
+  const decks = Object.values(JSON.parse((db.prepare('SELECT decks FROM col').get() as { decks: string }).decks) as Record<string, { id: number; name: string }>);
+  const cards = db.prepare('SELECT n.flds AS flds, c.did AS did FROM cards c JOIN notes n ON n.id = c.nid ORDER BY c.id').all() as unknown as { flds: string; did: number }[];
+  db.close();
+  const nameOf = new Map(decks.map((d) => [d.id, d.name]));
+  return { deckNames: decks.map((d) => d.name).filter((n) => n !== 'Default'), cards: cards.map((c) => [c.flds.split('\x1f')[0], nameOf.get(c.did)]) };
+}
+
+test('col.decks: notes naming different decks make one package, a deck each, every card in its own note\'s', () => {
+  const { deckNames, cards } = exportDecks(CHAPTER_NOTES);
+  assert.deepEqual(deckNames.sort(), [...CHAPTERS].sort(), 'one deck per distinct deckName, nothing else besides Default');
+  assert.deepEqual(cards, [
+    [CHAPTER_NOTES[0]!.fields.Text, CHAPTERS[0]],
+    [CHAPTER_NOTES[1]!.fields.Text, CHAPTERS[1]],
+    [CHAPTER_NOTES[1]!.fields.Text, CHAPTERS[1]],
+    [CHAPTER_NOTES[2]!.fields.Text, CHAPTERS[0]],
+    [CHAPTER_NOTES[3]!.fields.Text, CHAPTERS[2]],
+  ]);
+});
+
+test('col.decks: a deckName option puts every note into that one deck, whatever the notes name', () => {
+  const { deckNames, cards } = exportDecks(CHAPTER_NOTES, 'Botany::Everything');
+  assert.deepEqual(deckNames, ['Botany::Everything']);
+  assert.ok(cards.every(([, deck]) => deck === 'Botany::Everything'));
+});
+
+test('col.decks: a note naming no deck is rejected, named to the note, not exported into a nameless one', () => {
+  const nameless = [CHAPTER_NOTES[0]!, { ...CHAPTER_NOTES[1]!, deckName: '' }];
+  assert.throws(() => exportDecks(nameless), /^Error: notes\[1\]\.deckName is "" -- every note names the deck it goes into$/);
+  assert.throws(() => exportDecks(CHAPTER_NOTES, ' '), /options\.deckName is empty/);
 });
 
 test('col.models: exactly one Custom Cloze notetype, matching anki/custom-cloze.json', async () => {

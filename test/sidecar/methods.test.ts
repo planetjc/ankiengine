@@ -191,7 +191,7 @@ test('deck/export defaults to <stem>.apkg beside the deck and reopens to 7 notes
   }
 });
 
-test('deck/export honours outPath and a matching deckName; a mismatching deckName is -32000 (§4)', { timeout: TIMEOUT }, async () => {
+test('deck/export honours outPath and deckName, which puts every note into that one deck (§4)', { timeout: TIMEOUT }, async () => {
   const { dir, deckPath, mediaDir } = makeReferenceCardsWorkDir();
   const outPath = join(dir, 'custom', 'cards.apkg');
   const s = spawnSidecar({ mediaDir });
@@ -200,8 +200,20 @@ test('deck/export honours outPath and a matching deckName; a mismatching deckNam
   assert.equal(ok.outPath, outPath);
   assert.equal(ok.count, 7);
   assert.ok(existsSync(outPath));
-  const msg = expectEngineError(await s.request(2, 'deck/export', { path: deckPath, deckName: 'Other::Deck' }), 'mismatch');
-  assert.ok(msg.includes('"Other::Deck"') && msg.includes(`"${DECK_NAME}"`), `both names in the guard's message: ${msg}`);
+  const otherPath = join(dir, 'other', 'cards.apkg');
+  const other = await s.request(2, 'deck/export', { path: deckPath, outPath: otherPath, deckName: 'Other::Deck' });
+  assert.equal(other.error, undefined, JSON.stringify(other.error));
+  const extractDir = join(dir, 'other', 'extracted');
+  mkdirSync(extractDir, { recursive: true });
+  const db = new DatabaseSync(extractZipMember(otherPath, 'collection.anki21', extractDir), { readOnly: true });
+  try {
+    const decks = JSON.parse((db.prepare('SELECT decks FROM col').get() as { decks: string }).decks) as Record<string, { id: number; name: string }>;
+    assert.deepEqual(Object.values(decks).map((d) => d.name).sort(), ['Default', 'Other::Deck'], 'the notes\' own deck is not written at all');
+    const dids = (db.prepare('SELECT DISTINCT did FROM cards').all() as unknown as { did: number }[]).map((r) => r.did);
+    assert.deepEqual(dids, [Object.values(decks).find((d) => d.name === 'Other::Deck')!.id], 'every card sits in it');
+  } finally {
+    db.close();
+  }
   expectError(await s.request(3, 'deck/export', { path: deckPath, deckName: 7 }), -32602, 'deckName type');
   assert.equal(await s.end(), 0);
 });

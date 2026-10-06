@@ -124,7 +124,6 @@ function mediaKey(filename: string): string {
 interface LoadedDeck {
   text: string;
   label: string;
-  deckName: string;
   reviewHtml: string;
   /** Filenames the deck references, so the missing-media note can be
    *  recomputed when images arrive without re-running the whole engine. */
@@ -256,9 +255,6 @@ export async function loadDeckText(text: string, label: string): Promise<LoadedD
     deck = {
       text,
       label,
-      // Every note must share one deckName for export (src/apkg/collection.ts);
-      // the engine rejects a mismatch, so take the first and let it complain.
-      deckName: loaded.deckNames[0] ?? 'A.P.E.',
       reviewHtml: loaded.reviewHtml,
       referencedMedia: loaded.referencedMedia,
     };
@@ -340,7 +336,6 @@ export async function exportApkg(): Promise<void> {
       kind: 'export',
       deckText: deck.text,
       label: deck.label,
-      deckName: deck.deckName,
       media,
     });
 

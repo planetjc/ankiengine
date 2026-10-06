@@ -112,18 +112,19 @@ test('ape check --no-media suppresses the missing-media-dir note; without it, th
   assert.match(withoutFlag.stderr, /^note: .+ not found - skipping the media check$/m);
 });
 
-test('ape export defaults --deck-name to the deck\'s own notes[0].deckName and -o to a sibling .apkg', () => {
+test('ape export keeps each note\'s own deckName and defaults -o to a sibling .apkg', () => {
   const { dir, deckPath, mediaDir } = makeReferenceCardsWorkDir();
   const result = runCli(['export', deckPath], { cwd: dir, mediaDir });
   assert.equal(result.status, 0, `export should exit 0; stderr was:\n${result.stderr}`);
   assert.equal(result.stdout.trim(), `wrote ${join(dir, 'deck.apkg')} (7 notes)`);
 });
 
-test('ape export --deck-name that disagrees with the notes: the apkg module\'s own guard surfaces as exit 1', () => {
+test('ape export --deck-name that differs from the notes\' own puts them all into it', () => {
   const { dir, deckPath, mediaDir } = makeReferenceCardsWorkDir();
-  const result = runCli(['export', deckPath, '-o', join(dir, 'out.apkg'), '--deck-name', 'Some::Other::Deck'], { cwd: dir, mediaDir });
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /does not match this export's deckName/);
+  const outPath = join(dir, 'out.apkg');
+  const result = runCli(['export', deckPath, '-o', outPath, '--deck-name', 'Some::Other::Deck'], { cwd: dir, mediaDir });
+  assert.equal(result.status, 0, `export should exit 0; stderr was:\n${result.stderr}`);
+  assert.equal(result.stdout.trim(), `wrote ${outPath} (7 notes)`);
 });
 
 test('ape check --inventory with no cited fact:: tags: rule 5a fires for every note', () => {

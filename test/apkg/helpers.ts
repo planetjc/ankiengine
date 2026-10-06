@@ -55,12 +55,8 @@ export function makeEmptyMediaDir(tempDir: string): string {
 
 /**
  * Builds a minimal valid DeckNote for tests that don't care about most of
- * its shape. `deckName` defaults to a value tests should reuse verbatim as
- * writeApkg's own `deckName` option -- see the design note in
- * schema.test.ts on why every note in a single writeApkg call is kept
- * consistent with the call's own deckName rather than exercising
- * multi-deck / mismatched-deckName behavior, which the format doc does not
- * specify.
+ * its shape. `deckName` defaults to one shared deck; schema.test.ts's
+ * col.decks tests give notes different ones.
  */
 export function makeNote(
   text: string,

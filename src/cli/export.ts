@@ -36,19 +36,15 @@ export function runExport(argv: string[]): number {
   const notes = loadDeckNotes(deckPath);
 
   const outPath = outOpt ?? defaultApkgPath(deckPath);
-  // writeApkg requires every note's own deckName to equal this option
-  // (collection.ts's own guard, deliberately: a multi-deck deck.json is a
-  // caller mistake to reject, not to silently resolve) -- notes[0]'s own
-  // deckName is the only default that can ever satisfy that check on its
-  // own, and on a zero-note deck there is nothing to default from at all.
-  const deckName = deckNameOpt ?? notes[0]?.deckName ?? '';
+  // --deck-name puts every note into that one deck; without it each note
+  // keeps its own deckName, so a multi-deck deck.json is one package.
   const mediaDir = mediaDirOpt ?? resolveMediaDir();
 
   if (mediaDirOpt === undefined && !isExistingDirectory(mediaDir)) {
     console.error(`note: ${mediaDir} not found - media references will be packaged unresolved`);
   }
 
-  const { unresolvedMedia } = writeApkg(notes, { deckName, outPath, mediaDir, media: loadDeckMedia(deckPath), fallbackDirs: [dirname(deckPath)] });
+  const { unresolvedMedia } = writeApkg(notes, { deckName: deckNameOpt, outPath, mediaDir, media: loadDeckMedia(deckPath), fallbackDirs: [dirname(deckPath)] });
   console.log(`wrote ${outPath} (${notes.length} notes)`);
   if (unresolvedMedia.length > 0) {
     console.error(`media not found in ${mediaDir}, packaged without: ${unresolvedMedia.join(', ')}`);

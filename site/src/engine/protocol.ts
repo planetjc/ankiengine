@@ -15,7 +15,6 @@ export interface ExportRequest {
   kind: 'export';
   deckText: string;
   label: string;
-  deckName: string;
   /**
    * filename -> bytes, for whatever media the user supplied alongside.
    * A Map, not a Record: a plain object resolves inherited keys, so a deck

@@ -91,8 +91,40 @@ const DEFAULT_DCONF = {
   weightSearch: '',
 };
 
+/** One of the export's own decks, alongside Default in col.decks (doc §5b). */
+function makeDeck(id: number, name: string, nowSeconds: number) {
+  return {
+    id,
+    mod: nowSeconds,
+    name, // the exact "::"-joined hierarchical name, stored as-is (doc §5b)
+    usn: -1, // "created locally, not yet synced" -- matches a real user-created deck
+    lrnToday: [0, 0],
+    revToday: [0, 0],
+    newToday: [0, 0],
+    timeToday: [0, 0],
+    collapsed: false,
+    browserCollapsed: false,
+    desc: '',
+    dyn: 0,
+    conf: 1, // reuses the one dconf group rather than minting a new one
+    extendNew: 0,
+    extendRev: 0,
+    reviewLimit: null,
+    newLimit: null,
+    reviewLimitToday: null,
+    newLimitToday: null,
+    desiredRetention: null,
+  };
+}
+
 export interface BuildCollectionOptions {
-  deckName: string;
+  /**
+   * Puts every note into this one deck, whatever its own deckName says --
+   * the override Send to Anki takes too (src/sidecar/anki.ts). Left out,
+   * each note goes into the deck its own deckName names: one deck per
+   * distinct name, the way an exam deck keeps a subdeck per chapter.
+   */
+  deckName?: string;
   /** epoch ms, from the caller's clock -- the sole source of "now". */
   clockMs: number;
   /** Where the SQLite database comes from -- sqlite.ts. */
@@ -142,39 +174,39 @@ interface CardRow {
  * given the same clock (determinism.test.ts).
  */
 export function buildCollection(notes: DeckNote[], options: BuildCollectionOptions): Uint8Array {
-  const { deckName, clockMs } = options;
+  const { deckName: override, clockMs } = options;
   const nowSeconds = Math.floor(clockMs / 1000); // doc §5: col.crt and every notes/cards `mod` are seconds
+
+  if (override !== undefined && override.trim() === '') {
+    throw new Error(`options.deckName is empty -- leave it out to keep each note's own deckName`);
+  }
+  // Which deck each note goes into, settled before anything is written:
+  // deck.json is LLM-authored, so a note naming no deck is rejected here,
+  // named to the note, rather than exported into a nameless one.
+  const placed = notes.map((note, noteIndex) => {
+    if (override !== undefined) return override;
+    if (typeof note.deckName !== 'string' || note.deckName.trim() === '') {
+      throw new Error(`notes[${noteIndex}].deckName is ${JSON.stringify(note.deckName)} -- every note names the deck it goes into`);
+    }
+    return note.deckName;
+  });
 
   const ids = new IdAllocator(clockMs);
   const modelId = CUSTOM_CLOZE_MODEL_ID;
-  const deckId = ids.next();
+  // One deck per distinct name, in the order the notes first name them, and
+  // their ids taken before any note's -- as the single deck's always was, so
+  // a one-deck export comes out byte-for-byte as it did before.
+  const deckIds = new Map<string, number>();
+  for (const name of placed) if (!deckIds.has(name)) deckIds.set(name, ids.next());
 
   const models = { [String(modelId)]: buildCustomClozeModel(modelId, nowSeconds) };
 
-  const ourDeck = {
-    id: deckId,
-    mod: nowSeconds,
-    name: deckName, // the exact "::"-joined hierarchical name, stored as-is (doc §5b)
-    usn: -1, // "created locally, not yet synced" -- matches a real user-created deck
-    lrnToday: [0, 0],
-    revToday: [0, 0],
-    newToday: [0, 0],
-    timeToday: [0, 0],
-    collapsed: false,
-    browserCollapsed: false,
-    desc: '',
-    dyn: 0,
-    conf: 1, // reuses the one dconf group rather than minting a new one
-    extendNew: 0,
-    extendRev: 0,
-    reviewLimit: null,
-    newLimit: null,
-    reviewLimitToday: null,
-    newLimitToday: null,
-    desiredRetention: null,
-  };
-  const decks = { '1': DEFAULT_DECK, [String(deckId)]: ourDeck };
+  // Parents ("Botany", "Botany::Test 1") are left out: Anki's importer
+  // creates any a deck's name implies, as it always has for the one deck.
+  const decks: Record<string, unknown> = { '1': DEFAULT_DECK };
+  for (const [name, id] of deckIds) decks[String(id)] = makeDeck(id, name, nowSeconds);
   const dconf = { '1': DEFAULT_DCONF };
+  const firstDeckId = deckIds.values().next().value ?? DEFAULT_DECK.id;
 
   const noteRows: NoteRow[] = [];
   const cardRows: CardRow[] = [];
@@ -182,22 +214,9 @@ export function buildCollection(notes: DeckNote[], options: BuildCollectionOptio
   const seen = new Map<string, number>(); // guid key -> how many notes already had it
 
   for (const [noteIndex, note] of notes.entries()) {
-    // Both fields are part of the AnkiConnect-shaped DeckNote a note
-    // arrives as, but neither is actually consulted anywhere below: every
-    // card this call produces uses the one `deckName` passed to this
-    // function and the one hardcoded Custom Cloze model. A note that
-    // disagrees with either is therefore not "a note for a different
-    // deck/notetype that got exported anyway" -- silently re-typing it
-    // would be wrong -- it's rejected instead. Multi-deck output (doc §10
-    // documents deckName as a per-note field) means multiple writeApkg
-    // calls, one per deck, not one call whose notes disagree.
-    if (note.deckName !== deckName) {
-      throw new Error(
-        `notes[${noteIndex}].deckName is ${JSON.stringify(note.deckName)}, which does not match ` +
-          `this export's deckName ${JSON.stringify(deckName)} -- every note in one writeApkg call ` +
-          `is written into that one deck; split a multi-deck deck.json into one call per deck`,
-      );
-    }
+    // modelName is part of the AnkiConnect-shaped DeckNote a note arrives
+    // as, but every card here uses the one hardcoded Custom Cloze model: a
+    // note naming another is rejected, not silently re-typed.
     if (note.modelName !== CUSTOM_CLOZE_MODEL_NAME) {
       throw new Error(
         `notes[${noteIndex}].modelName is ${JSON.stringify(note.modelName)}, but this exporter only ` +
@@ -212,6 +231,7 @@ export function buildCollection(notes: DeckNote[], options: BuildCollectionOptio
     const extra = normalizeFieldText(note.fields.Extra);
     const source = normalizeFieldText(note.fields.Source);
 
+    const deckName = placed[noteIndex]!;
     const noteId = ids.next();
     // Custom Cloze's sortf is always 0 (Text): field-0-stripped and
     // sort-field-stripped are therefore the same computation here, per the
@@ -284,7 +304,7 @@ export function buildCollection(notes: DeckNote[], options: BuildCollectionOptio
       cardRows.push({
         id: ids.next(),
         nid: noteId,
-        did: deckId,
+        did: deckIds.get(deckName)!,
         ord,
         mod: nowSeconds,
         usn: -1,
@@ -309,7 +329,7 @@ export function buildCollection(notes: DeckNote[], options: BuildCollectionOptio
   // with a due value this file already used. dueCounter has already been
   // advanced past the last note's due, so it IS that value.
   const conf = {
-    curDeck: deckId,
+    curDeck: firstDeckId,
     schedVer: 2, // doc §5a: hard-required by the importer's scheduler-version check
     collapseTime: 1200,
     estTimes: true,
@@ -320,7 +340,7 @@ export function buildCollection(notes: DeckNote[], options: BuildCollectionOptio
     sched2021: true,
     nextPos: dueCounter,
     curModel: modelId,
-    activeDecks: [deckId],
+    activeDecks: [firstDeckId],
     dueCounts: true,
     timeLim: 0,
     sortBackwards: false,

@@ -17,8 +17,8 @@ export { buildApkg } from './build.js';
 export type { BuildApkgOptions, BuildApkgResult } from './build.js';
 
 export interface WriteApkgOptions {
-  /** Every note passed to a given call is written into this one deck. */
-  deckName: string;
+  /** Puts every note into this one deck; left out, each note goes into its own deckName's (collection.ts). */
+  deckName?: string;
   outPath: string;
   /** Must exist; referenced media files are read from here (doc §10). */
   mediaDir: string;

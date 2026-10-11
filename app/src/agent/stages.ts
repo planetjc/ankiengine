@@ -30,6 +30,7 @@ import { EngineError, type ConnectResult, type Coverage, type Flag, type Sidecar
 import type { Bus } from './bus.js';
 import { mergeFlags } from './flags.js';
 import { ankiReader, inAnkiLine } from './in-anki.js';
+import { perDeck } from './per-deck.js';
 import { STAGES, stepsNote, type Directive, type StepState } from './steps-note.js';
 import { readNewPerDay } from './study.js';
 
@@ -198,8 +199,6 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
   let cov: Coverage | null = null;
   /** The cards the last addition wrote, by where they start: what the preview, the audit and the send are about. */
   let lastAdded: { from: number; count: number } | null = null;
-  /** The deck the session state above is about: another deck opened starts it over. */
-  let stateDir: string | null = null;
   /** The artifact the gate is showing, if any. */
   let showing: string | null = null;
   /** A run-through is in progress: each stage starts the next until the audit. */
@@ -463,7 +462,33 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     if (!busy && ankiKey() === key) renderBar();
   }
 
+  // ---- each deck's own session -----------------------------------------------------
+  // One set of steps serves every deck the window opens, and what it
+  // remembers without a file -- reviews read, the preview opened, the export,
+  // the send, a re-run asked for -- belongs to the deck it happened in
+  // (per-deck.ts). Without this, an export of one deck showed the next deck
+  // opened as delivered, and an inventory read in one offered "Looks right"
+  // in the next, unread.
+  const sessions = perDeck(() => ({ reviewed: [] as StageId[], force: [] as StageId[], previewed: false, exportedTo: null as string | null, sentToAnki: null as string | null, lastAdded: null as { from: number; count: number } | null }));
+
+  /** When another deck is open: puts the last one's session away and takes out this one's. */
+  function followDeck(): void {
+    const dir = host.courseDir();
+    if (dir === sessions.at()) return;
+    const mine = sessions.swap(dir, { reviewed: [...reviewed], force: [...force], previewed, exportedTo, sentToAnki, lastAdded });
+    reviewed.clear();
+    for (const s of mine.reviewed) reviewed.add(s);
+    force.clear();
+    for (const s of mine.force) force.add(s);
+    ({ previewed, exportedTo, sentToAnki, lastAdded } = mine);
+    // The gate was the last deck's, and the shell has emptied it.
+    showing = null;
+    gateStage = null;
+    halted = false;
+  }
+
   function renderBar(): void {
+    followDeck();
     if (!host.courseDir()) {
       bar.hidden = true;
       return;
@@ -531,15 +556,6 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     if (!dir) {
       renderBar();
       return;
-    }
-    // What was looked at, exported or sent belongs to the deck it happened in.
-    if (dir !== stateDir) {
-      stateDir = dir;
-      reviewed.clear();
-      previewed = false;
-      exportedTo = sentToAnki = null;
-      lastAdded = null;
-      force.clear();
     }
     try {
       const { artifacts, coverage } = await sidecar.listCourse(dir);
@@ -1092,7 +1108,8 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
       renderBar();
     },
     run,
-    refresh,
+    // A deck just opened is refreshed first: its own session is taken out before anything is read against it.
+    refresh: () => (followDeck(), refresh()),
     busy: () => busy,
     note,
     act,

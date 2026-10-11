@@ -585,8 +585,10 @@ trashing a file whose cards may be in Anki. Send to Anki then adds the new
 cards and skips the rest, as it always did.
 
 The stage state that was not on disk -- reviews read, the preview opened,
-what was exported or sent -- was kept for the window, not the deck: sending
-one deck showed "Done" on the next. It is now reset when another deck opens.
+what was exported or sent, the cards an addition wrote -- was kept for the
+window, not the deck: sending one deck showed "Done" on the next. Each deck
+now keeps its own share (per-deck.ts), put away when another opens and
+there again when it comes back.
 
 **Anki read back (2026-10-11).** The app reads Anki as well as writing to it,
 over the same AnkiConnect endpoint and never changing the collection

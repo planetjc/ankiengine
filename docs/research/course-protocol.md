@@ -120,6 +120,42 @@ nowhere is listed in `unresolvedMedia` and the send goes on), then one
 id counts as `skipped`. An AnkiConnect error string → `-32000`
 `"AnkiConnect: <error>"`.
 
+### Anki read back (added 2026-10-11)
+
+Four reads, none of which changes the collection: they call only
+`deckNames`, `modelNames`, `findNotes`, `findCards`, `notesInfo` and
+`canAddNotes` (which builds each note in memory and adds nothing). Not
+`getDeckStats`: it looks a deck up with `decks.id()`, which creates a
+missing deck. Each answers `{ reachable, error, … }` as `anki/status` does:
+Anki closed is `reachable: false` with the sentence above and the rest
+empty, never a JSON-RPC error. A missing required param is `-32602`.
+
+A deck is searched as `deck:"<name>"` with `\`, `"`, `*` and `_` escaped by
+a backslash — the last two are wildcards in Anki's search, so "A_B"
+unescaped also finds "AxB" — which is the deck and every subdeck beneath it,
+any case. Checked against Anki 26.5's own search on a scratch collection;
+`test/sidecar/fake-anki.ts` parses queries the same way.
+
+- `anki/decks` params none → `{ reachable, error, decks }`: every deck name,
+  `::` and all, in Anki's order.
+- `anki/deckStats` params `{ deck }` → `{ reachable, error, deck, exists,
+  notes, cards, new, learning, review }` for the deck and its subdecks.
+  `new` is `is:new` (never studied, buried or suspended ones too), `review`
+  is `is:review` (graduated, relearning included), `learning` the rest, so
+  the three add up to `cards`. A deck Anki lacks is `exists: false` and
+  zeros, and is not made.
+- `anki/existing` params `{ path, deckName? }` → `{ reachable, error, decks,
+  total, existing, inAnki }`: which of the deck.json's notes Anki already
+  holds by the rule `anki/send` skips them by (`canAddNotes`, duplicate
+  scope "deck"). A note whose deck or note type Anki lacks, or whose first
+  field is empty, is not asked about — canAddNotes would refuse it for
+  that, which is not "already there". `inAnki` is per note, in order.
+- `anki/deckNotes` params `{ deck, limit? }` (default 200) → `{ reachable,
+  error, deck, exists, total, firstFields }`: the first field of each note
+  in the deck and its subdecks, oldest first, up to `limit`; `total` counts
+  them all. The organize step is told these (src/pipeline, `ankiParagraph`)
+  when the shell's client has the method, and waits on Anki 5 s at most.
+
 ## 3. What the oracle must prove
 
 - `method/list`/`read` against a temp dir with three `.md` files (one with

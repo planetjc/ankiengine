@@ -39,11 +39,22 @@ export interface CourseClassLike {
   exam: { name: string; date: string | null; covers?: string } | null;
 }
 
+/** What a deck in Anki already holds: anki/deckNotes's answer. */
+export interface AnkiHeldLike {
+  reachable: boolean;
+  deck: string;
+  exists: boolean;
+  total: number;
+  firstFields: string[];
+}
+
 /** The subset of the sidecar surface the stages need, however it is reached. */
 export interface PipelineClient {
   readMethod(name: string): Promise<{ text: string }>;
   listCourse(path: string): Promise<{ files: CourseFileLike[]; extracted?: ExtractedLike[]; class?: CourseClassLike | null }>;
   readCourse(path: string, name: string): Promise<{ text: string }>;
+  /** Reads the deck in Anki, never changing it; without it, no stage is told what Anki holds. */
+  ankiDeckNotes?(deck: string): Promise<AnkiHeldLike>;
   newSession(connectionId: string): Promise<{ session: { sessionId: string } }>;
   prompt(sessionId: string, blocks: ContentBlock[]): Promise<{ stopReason: string }>;
   /**
@@ -69,6 +80,7 @@ export interface WritingStage {
   ask: string; // the one app-side sentence: which folder, which artifact
   companions?: string[]; // other method-repo files this step refers to by name; attached so the agent never searches for them
   time?: boolean; // told the exam date and the student's rate: the step that sizes the deck to them
+  anki?: boolean; // told what the deck already holds in Anki: the step that decides which cards there will be
 }
 
 /** How deck.json names its slide images: the app packs, checks and renders them from this list. */
@@ -77,7 +89,7 @@ const MEDIA =
 
 export const WRITING_STAGES: WritingStage[] = [
   { id: 'extract', method: '1-extract.md', artifact: 'inventory.md', ask: 'Run this step on the course folder below and write inventory.md beside the material.', companions: ['SETUP.md'] },
-  { id: 'organize', method: '2-organize.md', artifact: 'plan.md', ask: 'Run this step on the course folder below: inventory.md is already there; write plan.md beside it.', time: true },
+  { id: 'organize', method: '2-organize.md', artifact: 'plan.md', ask: 'Run this step on the course folder below: inventory.md is already there; write plan.md beside it.', time: true, anki: true },
   {
     id: 'cards',
     method: '3-cards.md',
@@ -207,6 +219,51 @@ export function timeLine(exam: CourseClassLike['exam'], opts: StageOptions = {})
   return `Time: this deck is studied for ${exam.name} on ${exam.date}, ${when}.${rate}${covers} This date is the student's own and wins over any date in class.md.`;
 }
 
+/** A field as one line of text for a list in a prompt: tags gone, the common entities read, cut short when long. */
+function fieldText(html: string, max = 200): string {
+  const text = html
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/**
+ * What the deck already holds in Anki, read just before the step runs: the
+ * first field of each note, the field Anki judges a duplicate by. A send
+ * skips only an exact repeat; a card that asks the same thing in other words
+ * is the writer's to leave out. Empty when Anki is closed, has no such deck,
+ * or it is empty -- the step then reads as it always did.
+ */
+export function ankiParagraph(held: AnkiHeldLike | null): string {
+  if (!held || !held.reachable || !held.exists || held.total === 0) return '';
+  const listed = held.firstFields.map((f) => `- ${fieldText(f) || '(empty)'}`).join('\n');
+  const more = held.total > held.firstFields.length ? `\n- …and ${held.total - held.firstFields.length} more, not listed` : '';
+  const n = held.total === 1 ? 'one note' : `${held.total} notes`;
+  return `Already in Anki: the deck ${held.deck} holds ${n}, read from Anki just now. The first field of each:\n${listed}${more}\nThese are cards the student already has, not lecture material. Plan no card that asks what one of these already asks; where the inventory has such a fact, leave it out, and say in plan.md which were left out for that reason.`;
+}
+
+/** How long a stage waits on Anki before running without it: a modal dialog in Anki holds AnkiConnect's answer. */
+const ANKI_WAIT_MS = 5000;
+
+async function heldInAnki(client: PipelineClient, deck: string): Promise<AnkiHeldLike | null> {
+  if (!client.ankiDeckNotes || !deck) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => (timer = setTimeout(() => resolve(null), ANKI_WAIT_MS)));
+  try {
+    return await Promise.race([client.ankiDeckNotes(deck).catch(() => null), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** The prompt for a writing stage: method as the system block, the ask, the listing, then the materials as links. */
 export async function stageBlocks(client: PipelineClient, stage: WritingStage, courseDir: string, deckName: string, opts: StageOptions = {}): Promise<ContentBlock[]> {
   const [method, course] = await Promise.all([client.readMethod(stage.method), client.listCourse(courseDir)]);
@@ -231,9 +288,10 @@ export async function stageBlocks(client: PipelineClient, stage: WritingStage, c
       : `\n\nThis deck is in the class ${cls.folder}, which has no class brief yet.`
     : '';
   const time = stage.time && cls ? timeLine(cls.exam, opts) : '';
+  const anki = stage.anki && !isClass ? ankiParagraph(await heldInAnki(client, deckName)) : '';
   const blocks: ContentBlock[] = [
     { type: 'resource', resource: { uri: 'ape://system', text: method.text, mimeType: 'text/markdown' } },
-    { type: 'text', text: `${stage.ask}${attached}\n\n${deckLine}\n${isClass ? 'Class' : 'Course'} folder: ${courseDir}\n\n${isClass ? 'Files' : 'Materials'}:\n${describe(materials) || '(none)'}${describeExtracted(extracted)}${classPara}${time ? `\n\n${time}` : ''}` },
+    { type: 'text', text: `${stage.ask}${attached}\n\n${deckLine}\n${isClass ? 'Class' : 'Course'} folder: ${courseDir}\n\n${isClass ? 'Files' : 'Materials'}:\n${describe(materials) || '(none)'}${describeExtracted(extracted)}${classPara}${time ? `\n\n${time}` : ''}${anki ? `\n\n${anki}` : ''}` },
     ...extras.map((e): ContentBlock => ({ type: 'resource', resource: { uri: `ape://method/${e.name}`, text: e.text, mimeType: 'text/markdown' } })),
   ];
   if (cls && brief !== null) blocks.push({ type: 'resource', resource: { uri: fileUri(cls.path, 'class.md'), text: brief, mimeType: 'text/markdown' } });

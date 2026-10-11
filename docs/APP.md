@@ -587,3 +587,16 @@ cards and skips the rest, as it always did.
 The stage state that was not on disk -- reviews read, the preview opened,
 what was exported or sent -- was kept for the window, not the deck: sending
 one deck showed "Done" on the next. It is now reset when another deck opens.
+
+**Anki read back (2026-10-11).** The app reads Anki as well as writing to it,
+over the same AnkiConnect endpoint and never changing the collection
+(course-protocol §2b, "Anki read back"). While Anki is open the rail's deck
+name offers the decks Anki already has (`anki/decks`, a datalist on
+`#rail-deck`). Before Send to Anki the deliver step says how many of the
+deck's notes Anki already holds — by the same deck-scoped first-field rule a
+send skips them by — and, for a deck Anki has, how many of its cards are
+studied (`anki/existing`, `anki/deckStats`; the words are `agent/in-anki.ts`).
+The organize step is told the first field of every note the target deck
+already holds, and to leave out a card that would ask the same thing again
+(`anki/deckNotes`, src/pipeline `ankiParagraph`). Anki closed changes
+nothing: the bar says what it always did.

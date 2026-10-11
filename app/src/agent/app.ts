@@ -33,6 +33,7 @@ import { mountClassPane, type ClassPane } from './class-pane.js';
 import { mountClassSteps, type ClassSteps } from './class-steps.js';
 import { extractMaterials } from './extract.js';
 import { mountHome, type Home } from './home.js';
+import { deckSuggestions } from './in-anki.js';
 import { mountMaterials, type Materials } from './materials.js';
 import { mountFallbackPermissions } from './permission-any.js';
 import { mountPicker, type AgentPhase, type KeyStore, type Picker } from './picker.js';
@@ -109,7 +110,8 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
     <h1>A.P.E.</h1>
     <div class="viewswitch" role="group" aria-label="How the library is shown"><button type="button" data-view="decks">Decks</button><button type="button" data-view="school">School</button></div>
     <label class="railhead" for="rail-deck">Deck</label>
-    <input id="rail-deck" placeholder="Course::Lecture 3" autocomplete="off" title="What the deck is called in Anki. Two colons make a subdeck.">
+    <input id="rail-deck" placeholder="Course::Lecture 3" autocomplete="off" list="rail-deck-anki" title="What the deck is called in Anki. Two colons make a subdeck.">
+    <datalist id="rail-deck-anki"></datalist>
     <section class="rail-class" id="rail-class" hidden>
       <div class="railhead">Class</div>
       <div class="rail-class-name" id="rail-class-name"></div>
@@ -321,6 +323,7 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
       if (dir === courseDir) {
         deckName = deckInput.value = r.name;
         renderCrumb();
+        void stages.refresh(); // the deliver step says what Anki has under the new name
         if (screen === 'deck') await deck.open(dir);
       }
       return r.name;
@@ -987,6 +990,7 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
       if (!courseDir) return null;
       const r = await deck.sendToAnki(courseDir);
       void anki.check();
+      if (r) void anki.readDecks(); // a send can make a deck
       return r;
     },
     prepareMaterials: async (dir) => {
@@ -1020,9 +1024,24 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
   // localhost endpoint, so the answer is instant either way. A send refused
   // because Anki is closed leaves the dot red; once Anki answers, that error
   // is stale and is taken down -- any other error stays where it is.
+  //
+  // While Anki is open the deck's name in the rail offers the decks Anki
+  // already has, read when it opens, when the name is about to be typed, and
+  // after a send; closed, it offers none. Reading changes nothing in Anki.
   const anki = (() => {
     const el = $<HTMLElement>(rail, '#rail-anki');
+    const known = $<HTMLDataListElement>(rail, '#rail-deck-anki');
     let open: boolean | null = null;
+    const offer = (decks: string[]): void => {
+      known.replaceChildren(...deckSuggestions(decks).map((name) => Object.assign(document.createElement('option'), { value: name })));
+    };
+    const readDecks = async (): Promise<void> => {
+      const r = await sidecar.ankiDecks().catch(() => null);
+      offer(r?.reachable ? r.decks : []);
+    };
+    deckInput.addEventListener('focus', () => {
+      if (open) void readDecks();
+    });
     // The engine's words for it (NOT_OPEN in src/sidecar/anki.ts).
     const saysClosed = (): boolean => status.classList.contains('error') && /^Anki is not open\b/.test(statusText.textContent ?? '');
     const render = (): void => {
@@ -1034,15 +1053,21 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
     // `always` for the first answer, so the line never sits on "checking…" in a window opened behind others.
     const check = async (always = false): Promise<void> => {
       if (document.hidden && !always) return;
+      const was = open;
       open = await sidecar.ankiStatus().then((s) => s.reachable, () => false);
       if (open && saysClosed()) say('Anki is open — send again when ready');
       render();
+      if (open === was) return;
+      if (open) void readDecks();
+      else offer([]);
+      // The first answer is not a change: the deliver step reads Anki itself when it is shown.
+      if (was !== null) stages.ankiChanged();
     };
     render();
     void check(true);
     const timer = setInterval(() => void check(), 4000);
     document.addEventListener('visibilitychange', () => void check());
-    return { check: () => check(true), stop: () => clearInterval(timer) };
+    return { check: () => check(true), readDecks, stop: () => clearInterval(timer) };
   })();
 
   // ---- start -------------------------------------------------------------------

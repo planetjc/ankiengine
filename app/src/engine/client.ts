@@ -252,6 +252,42 @@ export interface SendToAnkiResult {
   createdModel: boolean;
 }
 
+/** Anki read back. Closed is `reachable: false` with the engine's sentence in `error`, and the rest empty -- an answer, never an error. */
+export interface AnkiRead {
+  reachable: boolean;
+  error: string | null;
+}
+
+/** One deck and every subdeck beneath it; new + learning + review = cards. */
+export interface AnkiDeckStats extends AnkiRead {
+  /** As Anki spells it, when it has the deck. */
+  deck: string;
+  exists: boolean;
+  notes: number;
+  cards: number;
+  new: number;
+  learning: number;
+  /** Lapsed cards being relearned among them. */
+  review: number;
+}
+
+/** What a deck in Anki, subdecks included, already holds: the first field of each note, oldest first. */
+export interface AnkiDeckNotes extends AnkiRead {
+  deck: string;
+  exists: boolean;
+  total: number;
+  firstFields: string[];
+}
+
+/** Which of a deck.json's notes Anki already holds, by the rule Send to Anki skips them by. */
+export interface AnkiExisting extends AnkiRead {
+  decks: string[];
+  total: number;
+  existing: number;
+  /** Per note, in deck.json's order. */
+  inAnki: boolean[];
+}
+
 export type SidecarClient = ReturnType<typeof makeSidecarClient>;
 
 /** Every method of the sidecar, bound to one host. Satisfies PipelineClient. */
@@ -271,6 +307,14 @@ export function makeSidecarClient(host: EngineHost) {
     ankiStatus: () => call<AnkiStatus>('anki/status'),
     /** Puts the deck straight into the running Anki: note type, deck, media, notes. */
     sendToAnki: (path: string, deckName?: string) => call<SendToAnkiResult>('anki/send', deckName ? { path, deckName } : { path }),
+    /** Anki's deck names. Reads only. */
+    ankiDecks: () => call<AnkiRead & { decks: string[] }>('anki/decks'),
+    /** How much of a deck in Anki, subdecks included, has been studied. Reads only; a missing deck is not made. */
+    ankiDeckStats: (deck: string) => call<AnkiDeckStats>('anki/deckStats', { deck }),
+    /** Which of the deck's notes Anki already holds, before a send. Reads only. */
+    ankiExisting: (path: string, deckName?: string) => call<AnkiExisting>('anki/existing', deckName ? { path, deckName } : { path }),
+    /** What a deck in Anki already holds, for the organize step. Reads only. */
+    ankiDeckNotes: (deck: string, limit?: number) => call<AnkiDeckNotes>('anki/deckNotes', limit === undefined ? { deck } : { deck, limit }),
     readFlags: (path: string) => call<{ flags: Flag[]; flagsPath: string }>('flags/read', { path }),
     writeFlags: (path: string, flags: Flag[]) => call<{ flagsPath: string; count: number }>('flags/write', { path, flags }),
 

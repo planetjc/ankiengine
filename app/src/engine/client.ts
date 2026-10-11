@@ -252,6 +252,8 @@ export interface SendToAnkiResult {
   createdModel: boolean;
 }
 
+// ---- anki/* reads (src/sidecar/anki.ts) --------------------------------------
+
 /** Anki read back. Closed is `reachable: false` with the engine's sentence in `error`, and the rest empty -- an answer, never an error. */
 export interface AnkiRead {
   reachable: boolean;
@@ -307,14 +309,17 @@ export function makeSidecarClient(host: EngineHost) {
     ankiStatus: () => call<AnkiStatus>('anki/status'),
     /** Puts the deck straight into the running Anki: note type, deck, media, notes. */
     sendToAnki: (path: string, deckName?: string) => call<SendToAnkiResult>('anki/send', deckName ? { path, deckName } : { path }),
+
+    // anki/* reads: never change the collection (src/sidecar/anki.ts, agent/in-anki.ts)
     /** Anki's deck names. Reads only. */
     ankiDecks: () => call<AnkiRead & { decks: string[] }>('anki/decks'),
     /** How much of a deck in Anki, subdecks included, has been studied. Reads only; a missing deck is not made. */
     ankiDeckStats: (deck: string) => call<AnkiDeckStats>('anki/deckStats', { deck }),
     /** Which of the deck's notes Anki already holds, before a send. Reads only. */
     ankiExisting: (path: string, deckName?: string) => call<AnkiExisting>('anki/existing', deckName ? { path, deckName } : { path }),
-    /** What a deck in Anki already holds, for the organize step. Reads only. */
+    /** What a deck in Anki already holds, for organize and cards. Reads only. */
     ankiDeckNotes: (deck: string, limit?: number) => call<AnkiDeckNotes>('anki/deckNotes', limit === undefined ? { deck } : { deck, limit }),
+
     readFlags: (path: string) => call<{ flags: Flag[]; flagsPath: string }>('flags/read', { path }),
     writeFlags: (path: string, flags: Flag[]) => call<{ flagsPath: string; count: number }>('flags/write', { path, flags }),
 

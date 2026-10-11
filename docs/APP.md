@@ -596,7 +596,9 @@ name offers the decks Anki already has (`anki/decks`, a datalist on
 deck's notes Anki already holds — by the same deck-scoped first-field rule a
 send skips them by — and, for a deck Anki has, how many of its cards are
 studied (`anki/existing`, `anki/deckStats`; the words are `agent/in-anki.ts`).
-The organize step is told the first field of every note the target deck
-already holds, and to leave out a card that would ask the same thing again
-(`anki/deckNotes`, src/pipeline `ankiParagraph`). Anki closed changes
-nothing: the bar says what it always did.
+The organize and cards steps are told what the target deck already holds --
+its notes, how many of its cards are studied and new, and each note's first
+field -- and to leave out a card that would ask the same thing again
+(`anki/deckStats` and `anki/deckNotes`, read through `StageOptions.anki`;
+the words are src/pipeline/anki.ts). Anki closed changes nothing: the bar
+says what it always did, and the steps are told nothing of Anki.

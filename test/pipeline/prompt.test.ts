@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ankiParagraph, CLASS_STAGE, additionStage, auditBlocks, classUpdateStage, describeExtracted, makeRunner, stageBlocks, timeLine, WRITING_STAGES, type AnkiHeldLike, type ContentBlock, type CourseClassLike, type PipelineClient } from '../../dist/pipeline/index.js';
+import { CLASS_STAGE, additionStage, auditBlocks, classUpdateStage, describeExtracted, makeRunner, stageBlocks, timeLine, WRITING_STAGES, type ContentBlock, type CourseClassLike, type PipelineClient } from '../../dist/pipeline/index.js';
 
 const EXTRACT = WRITING_STAGES[0]!;
 const PDF = { relPath: 'L.pdf', kind: 'pdf', bytes: 4096, mimeType: 'application/pdf' };
@@ -202,67 +202,4 @@ test('an audit of the cards added since the last one says where they start and w
   const runner = makeRunner(c, { connectionId: 'k', session: { sessionId: 'w' } } as never, '/c', () => 'Deck');
   await runner.audit({ from: 7, files: ['x.pdf'] });
   assert.match(textOf(sent[0]!), /Cards #7 onward/);
-});
-
-// What the deck already holds in Anki: organize alone is told, from a read
-// of Anki just before it runs, and nothing changes when Anki cannot say.
-const HELD: AnkiHeldLike = {
-  reachable: true,
-  deck: 'Course::Lecture 3',
-  exists: true,
-  total: 3,
-  firstFields: ['{{c1::<b>Hexokinase</b>}} phosphorylates&nbsp;glucose', 'A &lt;b&gt; tag &amp; a<br>break'],
-};
-
-test('organize is told what the deck already holds in Anki: each first field as text, how many more, and to leave out what they already ask', async () => {
-  const asked: string[] = [];
-  const c = client({ ankiDeckNotes: async (deck) => (asked.push(deck), HELD) });
-  const organize = WRITING_STAGES.find((s) => s.id === 'organize')!;
-  const text = textOf(await stageBlocks(c, organize, '/c', 'Course::Lecture 3'));
-  assert.deepEqual(asked, ['Course::Lecture 3']);
-  assert.match(text, /Already in Anki: the deck Course::Lecture 3 holds 3 notes, read from Anki just now\. The first field of each:\n- \{\{c1::Hexokinase\}\} phosphorylates glucose\n- A <b> tag & a break\n- …and 1 more, not listed\n/);
-  assert.match(text, /not lecture material\. Plan no card that asks what one of these already asks/);
-
-  // The other writing steps are not told, and do not ask.
-  for (const stage of WRITING_STAGES.filter((s) => s.id !== 'organize')) assert.doesNotMatch(textOf(await stageBlocks(c, stage, '/c', 'Course::Lecture 3')), /Already in Anki/, stage.id);
-  assert.deepEqual(asked, ['Course::Lecture 3']);
-});
-
-test('organize reads as before when Anki is closed, has no such deck, has it empty, fails, or no deck name is given', async () => {
-  const organize = WRITING_STAGES.find((s) => s.id === 'organize')!;
-  const plain = textOf(await stageBlocks(client(), organize, '/c', 'Course::Lecture 3'));
-  for (const answer of [
-    async () => ({ ...HELD, reachable: false, exists: false, total: 0, firstFields: [] }),
-    async () => ({ ...HELD, exists: false, total: 0, firstFields: [] }),
-    async () => ({ ...HELD, total: 0, firstFields: [] }),
-    async () => {
-      throw new Error('method not found: anki/deckNotes');
-    },
-  ]) assert.equal(textOf(await stageBlocks(client({ ankiDeckNotes: answer }), organize, '/c', 'Course::Lecture 3')), plain);
-  let asked = false;
-  await stageBlocks(client({ ankiDeckNotes: async () => ((asked = true), HELD) }), organize, '/c', '');
-  assert.equal(asked, false, 'no deck name, no deck to ask about');
-});
-
-test('ankiParagraph: one note is said so; a long field is cut short', () => {
-  const one = ankiParagraph({ ...HELD, total: 1, firstFields: ['x'.repeat(300)] });
-  assert.match(one, /holds one note,/);
-  const line = one.split('\n')[1]!;
-  assert.equal(line.length, 2 + 200);
-  assert.ok(line.endsWith('…'));
-  assert.equal(ankiParagraph(null), '');
-});
-
-test('organize waits on Anki five seconds at most: a dialog open in Anki holds its answer, and the step runs without it', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const organize = WRITING_STAGES.find((s) => s.id === 'organize')!;
-  const pending = stageBlocks(client({ ankiDeckNotes: () => new Promise<AnkiHeldLike>(() => {}) }), organize, '/c', 'Course::Lecture 3');
-  for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
-  t.mock.timers.tick(4999);
-  let settled = false;
-  void pending.then(() => (settled = true));
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(settled, false, 'still waiting at 4.999s');
-  t.mock.timers.tick(1);
-  assert.doesNotMatch(textOf(await pending), /Already in Anki/);
 });

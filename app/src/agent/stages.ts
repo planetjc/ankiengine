@@ -29,7 +29,7 @@ import {
 import { EngineError, type ConnectResult, type Coverage, type Flag, type SidecarClient, type SendToAnkiResult } from '../engine/client.js';
 import type { Bus } from './bus.js';
 import { mergeFlags } from './flags.js';
-import { inAnkiLine } from './in-anki.js';
+import { ankiReader, inAnkiLine } from './in-anki.js';
 import { STAGES, stepsNote, type Directive, type StepState } from './steps-note.js';
 import { readNewPerDay } from './study.js';
 
@@ -48,7 +48,7 @@ const ABOUT: Record<StageId, string> = {
   cards: 'The agent writes deck.json. The structural checks run on it here.',
   'deck preview': 'Every card, rendered. Flag any that are wrong.',
   audit: 'A fresh session that wrote none of the cards reads the whole deck. Its findings and your flags go to an adjudicator; the writer applies the verdicts as written.',
-  deliver: 'Export the .apkg beside the material. Double-click it to import into Anki.',
+  deliver: 'Export the .apkg beside your material. Double-click it to import into Anki.',
 };
 
 export interface StageHost {
@@ -147,8 +147,6 @@ function next(stage: StageId): StageId | null {
 export interface Stages {
   /** Called when an agent is connected or gone; before that only the two deck stages work. */
   setConnection(conn: ConnectResult | null): void;
-  /** Called when Anki opens or closes: the deliver step reads what it has again. */
-  ankiChanged(): void;
   run(stage: StageId): Promise<void>;
   /** Re-reads the folder and redraws the rail and the bar. */
   refresh(): Promise<void>;
@@ -158,6 +156,8 @@ export interface Stages {
   note(): string;
   /** Acts on one line the agent ended a reply with, after checking it; says what happened, for the chat. */
   act(d: Directive): Promise<string>;
+  /** Anki opened or closed: the deliver step reads what it has again. */
+  ankiChanged(): void;
 }
 
 interface Action {
@@ -200,9 +200,6 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
   let lastAdded: { from: number; count: number } | null = null;
   /** The deck the session state above is about: another deck opened starts it over. */
   let stateDir: string | null = null;
-  /** What Anki already has of the deck, said in the deliver step: for the folder and deck name it was read for. */
-  let inAnki: { key: string; line: string } | null = null;
-  let readingAnki: string | null = null;
   /** The artifact the gate is showing, if any. */
   let showing: string | null = null;
   /** A run-through is in progress: each stage starts the next until the audit. */
@@ -404,7 +401,6 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
         secondary: { label: 'Re-adjudicate', go: adjudicate },
       };
     const toAnki = { label: 'Send to Anki', go: send };
-    const known = inAnki !== null && inAnki.key === ankiKey() ? inAnki.line : '';
     if (sentToAnki !== null)
       return {
         stage: 'deliver',
@@ -417,30 +413,43 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
       return {
         stage: 'deliver',
         button: 'Export again',
-        hint: `Done. ${exportedTo} is beside the material — double-click it to import into Anki, or send it straight in.${known ? ` ${known}` : ''}`,
+        hint: `Done. ${exportedTo} is beside your material — double-click it to import into Anki, or send it straight in.${withLine(ankiLine())}`,
         go: () => run('deliver'),
         secondary: toAnki,
       };
+    const known = ankiLine();
     // What Anki already has says it best; without Anki's answer, an addition says the new cards go in beside the old.
     const adds = lastAdded ? ` Send to Anki adds the ${lastAdded.count} new card${lastAdded.count === 1 ? '' : 's'}; the ones already there are skipped.` : '';
     const hint = known ? `${known} Export writes an .apkg to import by hand instead.` : `${ABOUT.deliver} Anki must be open with the AnkiConnect add-on; Export writes an .apkg to import by hand instead.${adds}`;
     return { stage: 'deliver', button: 'Send to Anki', hint, go: send, secondary: { label: 'Export .apkg', go: () => run('deliver') } };
   }
 
-  /** Which deck the Anki line is about: the folder, and the name it goes to Anki under. */
+  // ---- what Anki already has of the deck, said in the deliver step ----------------
+  // Read when the step is shown -- for this folder under this name, and again
+  // once what was read is a few seconds old -- and when Anki opens or closes.
+  // Only reads (in-anki.ts); Anki closed, or an engine without these reads,
+  // leaves the line empty and the bar says what it always did.
+  const ANKI_FRESH_MS = 5000;
+  let inAnki: { key: string; at: number; line: string } | null = null;
+  let readingAnki: string | null = null;
+  const withLine = (line: string): string => (line ? ` ${line}` : '');
+
+  /** Which deck the line is about: the folder, and the name it goes to Anki under. */
   function ankiKey(): string {
     return `${host.courseDir() ?? ''}\n${host.deckName()}`;
   }
 
-  /**
-   * Reads what Anki already has of the deck -- which of its notes, and how
-   * much of the deck by that name is studied -- then redraws the bar. Only
-   * reads; Anki closed, or an engine without these reads, leaves the line
-   * empty and the bar says what it always did.
-   */
+  /** The line for the deck as it is now, '' until Anki has answered; asks again when what is held is for another deck or old. */
+  function ankiLine(): string {
+    const key = ankiKey();
+    const held = inAnki !== null && inAnki.key === key ? inAnki : null;
+    if ((held === null || Date.now() - held.at > ANKI_FRESH_MS) && readingAnki !== key) void readAnki();
+    return held?.line ?? '';
+  }
+
   async function readAnki(): Promise<void> {
     const dir = host.courseDir();
-    if (!dir || !has.deck) return;
+    if (!dir) return;
     const key = ankiKey();
     readingAnki = key;
     const name = host.deckName();
@@ -450,8 +459,8 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     ]);
     if (readingAnki !== key) return; // asked again since, for this deck or another
     readingAnki = null;
-    inAnki = { key, line: inAnkiLine(existing, stats) };
-    if (ankiKey() === key) renderBar();
+    inAnki = { key, at: Date.now(), line: inAnkiLine(existing, stats) };
+    if (!busy && ankiKey() === key) renderBar();
   }
 
   function renderBar(): void {
@@ -476,8 +485,6 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
       return;
     }
     const a = action();
-    // The deck was renamed, or another opened: what Anki has of it is read again.
-    if (a.stage === 'deliver' && sentToAnki === null && inAnki?.key !== ankiKey() && readingAnki !== ankiKey()) void readAnki();
     const n = STAGES.indexOf(a.stage) + 1;
     // Material added to a made deck: the kicker says so until it is through to the audit.
     const adding = behind().audit ? (cov?.materials ?? []).filter((f) => !(cov?.audit ?? cov?.deck ?? cov?.plan ?? cov?.inventory)?.covers.includes(f)).length : 0;
@@ -547,8 +554,6 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     }
     rail.querySelectorAll<HTMLLIElement>('li').forEach((li) => li.classList.toggle('done', done(li.dataset.stage as StageId)));
     renderBar();
-    // Anki may have changed since it was last read; renderBar has already asked if the deck did.
-    if (!busy && action().stage === 'deliver' && sentToAnki === null && readingAnki !== ankiKey()) void readAnki();
   }
 
   function showGate(html: string, artifact: string | null = null): void {
@@ -628,8 +633,9 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
         const n1 = noteCount(after);
         lastAdded = n1 > n0 ? { from: n0 + 1, count: n1 - n0 } : null;
         newFrom = lastAdded ? lastAdded.from : (cov?.unaudited ?? null);
-        // New cards are new to Anki and to the .apkg: what was sent or exported was the deck without them.
+        // New cards are new to Anki and to the .apkg: what was sent or exported was the deck without them, and what Anki was said to hold is read again.
         exportedTo = sentToAnki = null;
+        inAnki = null;
         previewed = false;
       }
     }
@@ -1081,17 +1087,19 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     setConnection(conn) {
       const dir = host.courseDir();
       // The rate is read at each run, so a change in Settings reaches the next organize.
-      runner = conn && conn.session && dir ? makeRunner(sidecar, conn, dir, host.deckName, note, () => ({ newPerDay: readNewPerDay() })) : null;
+      runner = conn && conn.session && dir ? makeRunner(sidecar, conn, dir, host.deckName, note, () => ({ newPerDay: readNewPerDay(), anki: ankiReader(sidecar) })) : null;
       writerSession = conn?.session?.sessionId ?? null;
       renderBar();
-    },
-    ankiChanged() {
-      if (!busy && host.courseDir() && action().stage === 'deliver' && sentToAnki === null) void readAnki();
     },
     run,
     refresh,
     busy: () => busy,
     note,
     act,
+    ankiChanged() {
+      if (!host.courseDir()) return;
+      inAnki = null;
+      renderBar();
+    },
   };
 }

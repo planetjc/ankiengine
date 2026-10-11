@@ -1,9 +1,11 @@
 // What Anki already has, in the app's words: the deck names offered in the
-// rail, and the deliver step's line on what a send will add and how much of
-// the deck has been studied. Read through the engine's anki/* reads, which
+// rail, the deliver step's line on what a send will add and how much of the
+// deck has been studied, and what the steps that plan and write cards are
+// told the deck already holds. Read through the engine's anki/* reads, which
 // never change the collection.
 
-import type { AnkiDeckStats, AnkiExisting } from '../engine/client.js';
+import type { AnkiHeldLike } from '../../../dist/pipeline/anki.js';
+import type { AnkiDeckStats, AnkiExisting, SidecarClient } from '../engine/client.js';
 
 /** Anki's deck names in the order a person looks for them: by name, Lecture 2 before Lecture 10. */
 export function deckSuggestions(decks: string[]): string[] {
@@ -32,4 +34,24 @@ export function inAnkiLine(existing: AnkiExisting | null, stats: AnkiDeckStats |
     lines.push(`${stats.deck} has ${has} in Anki, ${how}.`);
   }
   return lines.join(' ');
+}
+
+/**
+ * What the deck already holds in Anki, as organize and cards are told it
+ * (src/pipeline/anki.ts): its counts from anki/deckStats, its notes' first
+ * fields from anki/deckNotes. A stage's reader, handed over in StageOptions.
+ */
+export function ankiReader(sidecar: Pick<SidecarClient, 'ankiDeckStats' | 'ankiDeckNotes'>): (deck: string) => Promise<AnkiHeldLike> {
+  return async (deck) => {
+    const [stats, held] = await Promise.all([sidecar.ankiDeckStats(deck), sidecar.ankiDeckNotes(deck)]);
+    return {
+      reachable: stats.reachable && held.reachable,
+      deck: stats.deck,
+      exists: stats.exists && held.exists,
+      notes: held.total,
+      cards: stats.cards,
+      new: stats.new,
+      firstFields: held.firstFields,
+    };
+  };
 }

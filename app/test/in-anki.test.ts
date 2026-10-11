@@ -1,9 +1,10 @@
-// What Anki already has, as the rail and the deliver step say it.
+// What Anki already has, as the rail and the deliver step say it, and as
+// organize and cards are told it.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { AnkiDeckStats, AnkiExisting } from '../src/engine/client.ts';
-import { deckSuggestions, inAnkiLine } from '../src/agent/in-anki.ts';
+import { ankiReader, deckSuggestions, inAnkiLine } from '../src/agent/in-anki.ts';
 
 const existing = (total: number, there: number, reachable = true): AnkiExisting => ({
   reachable,
@@ -56,4 +57,19 @@ test('Anki closed, or an engine without the reads, says nothing: the bar keeps i
 test('no line says "your"', () => {
   const said = [inAnkiLine(existing(42, 18), stats(150, 30)), inAnkiLine(existing(1, 0), stats(1, 1))].join(' ');
   assert.doesNotMatch(said, /\byour\b/i);
+});
+
+test('what organize and cards are told: the deck\'s counts and its notes\' first fields, read together', async () => {
+  const asked: string[] = [];
+  const read = ankiReader({
+    ankiDeckStats: async (deck) => (asked.push(`stats ${deck}`), { ...stats(5, 2), notes: 3 }),
+    ankiDeckNotes: async (deck) => (asked.push(`notes ${deck}`), { reachable: true, error: null, deck: 'Course::Lecture 3', exists: true, total: 3, firstFields: ['a', 'b', 'c'] }),
+  });
+  assert.deepEqual(await read('course::lecture 3'), { reachable: true, deck: 'Course::Lecture 3', exists: true, notes: 3, cards: 5, new: 2, firstFields: ['a', 'b', 'c'] });
+  assert.deepEqual(asked.sort(), ['notes course::lecture 3', 'stats course::lecture 3']);
+  const closed = ankiReader({
+    ankiDeckStats: async () => ({ ...stats(0, 0, false), reachable: false }),
+    ankiDeckNotes: async () => ({ reachable: false, error: 'Anki is not open', deck: 'X', exists: false, total: 0, firstFields: [] }),
+  });
+  assert.equal((await closed('X')).reachable, false);
 });

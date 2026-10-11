@@ -153,8 +153,9 @@ any case. Checked against Anki 26.5's own search on a scratch collection;
 - `anki/deckNotes` params `{ deck, limit? }` (default 200) → `{ reachable,
   error, deck, exists, total, firstFields }`: the first field of each note
   in the deck and its subdecks, oldest first, up to `limit`; `total` counts
-  them all. The organize step is told these (src/pipeline, `ankiParagraph`)
-  when the shell's client has the method, and waits on Anki 5 s at most.
+  them all. With `anki/deckStats`'s counts, this is what the organize and
+  cards steps are told the deck already holds (src/pipeline/anki.ts, read
+  through `StageOptions.anki`); a step waits on Anki 5 s at most.
 
 ## 3. What the oracle must prove
 

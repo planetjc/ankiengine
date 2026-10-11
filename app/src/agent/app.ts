@@ -430,12 +430,15 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
     if (!courseDir) return;
     try {
       const dir = courseDir;
-      const { files, extracted, class: cls } = await sidecar.listCourse(dir);
+      const { files, extracted, class: cls, coverage } = await sidecar.listCourse(dir);
       if (dir !== courseDir) return;
       const material = files.filter((f) => f.kind !== 'other');
       materials.set(material, extracted);
       if (openClass) classChanged(cls ?? openClass);
       else {
+        // Files added after the deck was made, until the cards have them.
+        const last = coverage?.deck ?? coverage?.plan ?? coverage?.inventory;
+        materials.markNew(last ? coverage!.materials.filter((f) => !last.covers.includes(f)) : []);
         const was = deckClass?.path ?? null;
         deckClass = cls ?? null;
         classPane.showDeck(deckClass, dir);
@@ -761,11 +764,11 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
   }
 
   // ---- a class, when one is the workspace -----------------------------------------
-  /** The open class's record changed (its exams, its brief): everything that shows it follows. */
+  /** The open class's record changed (its exams, its deadlines, its brief): everything that shows it follows. */
   function classChanged(cls: ClassSummary): void {
     if (!openClass || norm(cls.path) !== norm(openClass.path)) return;
     const renamed = cls.folder !== openClass.folder;
-    openClass = { folder: cls.folder, path: cls.path, exams: cls.exams, brief: cls.brief, files: cls.files, newPapers: cls.newPapers ?? [] };
+    openClass = { folder: cls.folder, path: cls.path, exams: cls.exams, deadlines: cls.deadlines ?? [], brief: cls.brief, files: cls.files, newPapers: cls.newPapers ?? [] };
     deckName = cls.folder;
     classPane.showClass(openClass);
     materials.markNew(openClass.newPapers ?? []);
@@ -993,6 +996,7 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
     openSettings: () => show('settings'),
     hasMaterials: () => materials.count() > 0,
     addFiles: askForFiles,
+    coverageChanged: () => void refreshMaterials(),
   });
   const classSteps: ClassSteps = mountClassSteps(classBriefEl, gate, {
     sidecar: runnerClient,

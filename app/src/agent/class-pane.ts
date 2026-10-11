@@ -1,11 +1,12 @@
 // What a class shows above its files: its exams, which the person keeps --
 // the agent proposes them from the syllabus, the person corrects them, and
-// the organize step sizes each deck to the one it is studied for. On a deck
+// the organize step sizes each deck to the one it is studied for -- and its
+// deadlines, kept the same way, which no deck is sized to. On a deck
 // in a class, the same place says which class, and which exam the deck is
 // for, and lets that be changed.
 
-import { EngineError, type ClassSummary, type CourseClass, type DeckSummary, type Exam, type Semester, type SidecarClient } from '../engine/client.js';
-import { countdown, nextExam, orderSemesters, roomBefore, semesterOf, shortDate, termState, ymd } from './class-rules.js';
+import { EngineError, type ClassSummary, type CourseClass, type Deadline, type DeckSummary, type Exam, type Semester, type SidecarClient } from '../engine/client.js';
+import { countdown, dueWhen, nextExam, orderSemesters, roomBefore, semesterOf, shortDate, termState, ymd } from './class-rules.js';
 import { deckStatus, deckSteps } from './deck-list.js';
 import { readNewPerDay } from './study.js';
 
@@ -42,6 +43,10 @@ export interface ClassPane {
   focusNewDeck(): void;
 }
 
+/** The two dated lists a class keeps, as the engine names them. */
+type List = 'exams' | 'deadlines';
+type Row = { id?: string; name: string; date: string | null; covers?: string; what?: string };
+
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
@@ -65,8 +70,8 @@ export function mountClassPane(host: HTMLElement, more: HTMLElement, opts: Class
   }
   const inside = (el: Element | null): boolean => !!el && (host.contains(el) || more.contains(el));
   let mode: { kind: 'class'; cls: ClassSummary } | { kind: 'deck'; cls: CourseClass; path: string } | null = null;
-  /** A new exam row not yet named, kept across redraws until it is. */
-  let draft = false;
+  /** A new row not yet named -- an exam or a deadline -- kept across redraws until it is. */
+  let draft: List | null = null;
   let confirmUnclass = false;
 
   function renderClass(cls: ClassSummary): void {
@@ -79,11 +84,29 @@ export function mountClassPane(host: HTMLElement, more: HTMLElement, opts: Class
         <button type="button" class="tremove" data-remove-exam title="Remove ${esc(e.name)}" aria-label="Remove ${esc(e.name)}">×</button>
       </li>`,
     );
-    if (draft)
+    if (draft === 'exams')
       rows.push(`<li class="exam draft" data-id="">
         <input class="ex-name" value="" placeholder="Exam name — Midterm 2" aria-label="New exam's name" autocomplete="off" spellcheck="false">
         <input class="ex-date" type="date" value="" aria-label="New exam's date">
         <input class="ex-covers" value="" placeholder="What it covers" aria-label="What the new exam covers" autocomplete="off">
+        <span class="ex-when">name it to keep it</span>
+        <button type="button" class="tremove" data-remove-exam title="Drop this row" aria-label="Drop this row">×</button>
+      </li>`);
+    const deadlines = cls.deadlines ?? [];
+    const due = deadlines.map(
+      (d) => `<li class="exam" data-id="${esc(d.id)}">
+        <input class="ex-name" value="${esc(d.name)}" aria-label="Deadline name" autocomplete="off" spellcheck="false">
+        <input class="ex-date" type="date" value="${esc(d.date ?? '')}" aria-label="When ${esc(d.name)} is due">
+        <input class="ex-covers" value="${esc(d.what ?? '')}" placeholder="What is due" aria-label="What ${esc(d.name)} is" autocomplete="off">
+        <span class="ex-when${d.date && d.date < ymd() ? ' past' : ''}">${esc(d.date ? dueWhen(d.date) : 'no date yet')}</span>
+        <button type="button" class="tremove" data-remove-exam title="Remove ${esc(d.name)}" aria-label="Remove ${esc(d.name)}">×</button>
+      </li>`,
+    );
+    if (draft === 'deadlines')
+      due.push(`<li class="exam draft" data-id="">
+        <input class="ex-name" value="" placeholder="Deadline — Lab report 2" aria-label="New deadline's name" autocomplete="off" spellcheck="false">
+        <input class="ex-date" type="date" value="" aria-label="When the new deadline is due">
+        <input class="ex-covers" value="" placeholder="What is due" aria-label="What the new deadline is" autocomplete="off">
         <span class="ex-when">name it to keep it</span>
         <button type="button" class="tremove" data-remove-exam title="Drop this row" aria-label="Drop this row">×</button>
       </li>`);
@@ -103,15 +126,17 @@ export function mountClassPane(host: HTMLElement, more: HTMLElement, opts: Class
       ${deckRows.length ? `<ul class="cdecks">${deckRows.join('')}</ul>` : ''}
       <form class="cnewdeck" data-new-deck><input name="deck" placeholder="${mine.length ? 'Next deck' : 'First deck'} — Lecture 4: Bone" aria-label="New deck in ${esc(cls.folder)}" autocomplete="off" spellcheck="false"><button type="submit">New deck</button></form>`;
     more.innerHTML = `
-      <header class="mhead cexams-head"><h3>Exams <small>${cls.exams.length || ''}</small></h3><span class="grow"></span><button type="button" class="quiet" data-add-exam>Add exam</button></header>
-      ${rows.length ? `<ul class="exams">${rows.join('')}</ul>` : `<p class="muted exams-empty">No exams yet. The class brief finds them in the syllabus for you to check, or add one.</p>`}
+      <header class="mhead cexams-head"><h3>Exams <small>${cls.exams.length || ''}</small></h3><span class="grow"></span><button type="button" class="quiet" data-add="exams">Add exam</button></header>
+      ${rows.length ? `<ul class="exams" data-list="exams">${rows.join('')}</ul>` : `<p class="muted exams-empty">No exams yet. The class brief finds them in the syllabus for you to check, or add one.</p>`}
       <p class="hint">Each deck in ${esc(cls.folder)} is studied for ${next ? `the next exam — ${esc(next.name)} — unless you pick another on the deck` : 'the next exam on the calendar, unless you pick another on the deck'}; organize sizes it to what ${readNewPerDay()} new cards a day reviews before then. <button type="button" class="link" data-settings>Change the rate in Settings</button></p>
+      <header class="mhead cexams-head"><h3>Deadlines <small>${deadlines.length || ''}</small></h3><span class="grow"></span><button type="button" class="quiet" data-add="deadlines">Add deadline</button></header>
+      ${due.length ? `<ul class="exams" data-list="deadlines">${due.join('')}</ul>` : `<p class="muted exams-empty">Nothing due yet. The class brief finds assignments, papers and lab reports in the syllabus, or add one.</p>`}
       <footer class="class-foot">${termPicker(cls)}${
         confirmUnclass
           ? `<span>Make ${esc(cls.folder)} a plain folder? Its decks stay; the class's files and brief go to the trash for 30 days.</span><button type="button" class="danger" data-unclass-yes>Make it plain</button><button type="button" class="quiet" data-unclass-no>Keep the class</button>`
           : `<button type="button" class="quiet" data-unclass>Make it a plain folder…</button>`
       }</footer>`;
-    if (draft) more.querySelector<HTMLInputElement>('.exam.draft .ex-name')?.focus();
+    if (draft) more.querySelector<HTMLInputElement>(`[data-list="${draft}"] .exam.draft .ex-name`)?.focus();
   }
 
   /** Which semester the class is in, and the way to another. Moving it renames its folder, and every deck in it. */
@@ -152,44 +177,46 @@ export function mountClassPane(host: HTMLElement, more: HTMLElement, opts: Class
     else renderDeck(mode.cls);
   }
 
-  /** Every named row as the person left it; a row with no name is not an exam yet. */
-  function rowsNow(): (Omit<Exam, 'id'> & { id?: string })[] {
-    return [...more.querySelectorAll<HTMLElement>('.exam')]
+  /** Every named row of one list as the person left it; a row with no name is not one yet. */
+  function rowsNow(list: List): Row[] {
+    const detail = list === 'exams' ? 'covers' : 'what';
+    return [...more.querySelectorAll<HTMLElement>(`[data-list="${list}"] .exam`)]
       .map((li) => ({
         ...(li.dataset.id ? { id: li.dataset.id } : {}),
         name: li.querySelector<HTMLInputElement>('.ex-name')!.value.trim(),
         date: li.querySelector<HTMLInputElement>('.ex-date')!.value || null,
-        covers: li.querySelector<HTMLInputElement>('.ex-covers')!.value.trim(),
+        [detail]: li.querySelector<HTMLInputElement>('.ex-covers')!.value.trim(),
       }))
       .filter((e) => e.name);
   }
 
-  async function save(exams: (Omit<Exam, 'id'> & { id?: string })[]): Promise<void> {
+  async function save(list: List, rows: Row[]): Promise<void> {
     if (mode?.kind !== 'class') return;
     const cls = mode.cls;
     try {
-      const r = await opts.sidecar.updateClass(opts.decksRoot, cls.path, exams);
+      const r = await opts.sidecar.updateClass(opts.decksRoot, cls.path, list === 'exams' ? { exams: rows as (Omit<Exam, 'id'> & { id?: string })[] } : { deadlines: rows as (Omit<Deadline, 'id'> & { id?: string })[] });
       if (mode?.kind === 'class' && mode.cls.path === cls.path) mode = { kind: 'class', cls: r };
       opts.changed(r);
     } catch (err) {
       opts.say(err instanceof EngineError ? err.message : String(err), true);
     }
     // The save lands after the person has moved on -- tabbed from the name to
-    // the date, say. The redraw puts them back where they went, by row and field.
+    // the date, say. The redraw puts them back where they went, by list, row and field.
     const at = document.activeElement?.closest<HTMLElement>('.exam') && more.contains(document.activeElement) ? document.activeElement : null;
-    const rows = [...more.querySelectorAll('.exam')];
-    const where = at ? { row: rows.indexOf(at.closest('.exam')!), field: [...at.classList].find((c) => c.startsWith('ex-')) } : null;
+    const holder = at?.closest<HTMLElement>('[data-list]');
+    const where = at && holder ? { list: holder.dataset.list!, row: [...holder.querySelectorAll('.exam')].indexOf(at.closest('.exam')!), field: [...at.classList].find((c) => c.startsWith('ex-')) } : null;
     render();
-    if (where?.field && where.row >= 0) more.querySelectorAll<HTMLElement>('.exam')[where.row]?.querySelector<HTMLElement>(`.${where.field}`)?.focus();
+    if (where?.field && where.row >= 0) more.querySelectorAll<HTMLElement>(`[data-list="${where.list}"] .exam`)[where.row]?.querySelector<HTMLElement>(`.${where.field}`)?.focus();
   }
 
   on('change', (e) => {
     const t = e.target as HTMLElement;
     if (mode?.kind === 'class' && t.closest('.exam')) {
-      // A draft that has been named is an exam now.
+      // A draft that has been named is a row now.
       if (t.closest('.exam.draft') && !(t.closest('.exam.draft')!.querySelector<HTMLInputElement>('.ex-name')!.value.trim())) return;
-      draft = false;
-      void save(rowsNow());
+      const list = t.closest<HTMLElement>('[data-list]')!.dataset.list as List;
+      if (draft === list) draft = null;
+      void save(list, rowsNow(list));
       return;
     }
     const term = t.closest<HTMLSelectElement>('select[data-term]');
@@ -243,19 +270,21 @@ export function mountClassPane(host: HTMLElement, more: HTMLElement, opts: Class
     const deckButton = t.closest<HTMLElement>('[data-deck]');
     const deck = deckButton && opts.decks().find((d) => d.path === deckButton.dataset.deck);
     if (deck) return opts.openDeck(deck);
-    if (t.closest('[data-add-exam]')) {
-      draft = true;
+    const add = t.closest<HTMLElement>('[data-add]');
+    if (add) {
+      draft = add.dataset.add as List;
       return render();
     }
     const remove = t.closest<HTMLElement>('[data-remove-exam]');
     if (remove) {
       const li = remove.closest<HTMLElement>('.exam')!;
+      const list = li.closest<HTMLElement>('[data-list]')!.dataset.list as List;
       if (li.classList.contains('draft')) {
-        draft = false;
+        draft = null;
         return render();
       }
       li.remove();
-      return void save(rowsNow());
+      return void save(list, rowsNow(list));
     }
     if (t.closest('[data-unclass]')) {
       confirmUnclass = true;
@@ -274,7 +303,7 @@ export function mountClassPane(host: HTMLElement, more: HTMLElement, opts: Class
   return {
     showClass(cls) {
       if (mode?.kind !== 'class' || mode.cls.path !== cls.path) {
-        draft = false;
+        draft = null;
         confirmUnclass = false;
       }
       mode = { kind: 'class', cls };

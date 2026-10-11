@@ -576,6 +576,12 @@
 .hx-class { font-size: 12.5px; color: var(--muted); text-decoration: none; justify-self: start; }
 .hx-class:hover { color: var(--fg); text-decoration: underline; }
 .hx-when { color: var(--muted); font-size: 12px; }
+/* A deadline beside the exams: its date in the second colour, so the two read apart at a glance. */
+.hx-due .hx-date { color: var(--info); }
+.hx-due strong { font-weight: 500; }
+/* Within the week. */
+.hexams li.soon { margin: 0 -8px; padding: 2px 8px; background: var(--raised); border-radius: 6px; }
+.hexams li.soon .hx-when { color: var(--fg); font-weight: 600; }
 
 .ccards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 12px 0 0; }
 .ccard {
@@ -588,6 +594,8 @@
 .ccard-name { font-size: 15px; font-weight: 650; font-variation-settings: var(--voice-display); overflow-wrap: anywhere; }
 .ccard-exam { font-size: 12.5px; color: var(--accent); font-weight: 600; }
 .ccard-exam.none { color: var(--muted); font-weight: 400; }
+.ccard-due { font-size: 12px; color: var(--info); font-weight: 500; }
+.ccard-exam.soon::before, .ccard-due.soon::before { content: '● '; color: var(--banana-edge); }
 .ccard-meta { font-size: 12px; color: var(--muted); }
 .ccard.add { border-style: dashed; border-color: var(--line-strong); background: transparent; align-content: center; }
 .ccard.add .ccard-name { color: var(--accent); font-size: 14px; }
@@ -663,6 +671,7 @@
 .exam .tremove { background: transparent; color: var(--muted); border: 0; padding: 0 4px; font-size: 15px; line-height: 1; font-weight: 400; }
 .exam .tremove:hover { color: var(--bad); filter: none; }
 .exams-empty { margin: 0 0 4px; }
+.hint + .cexams-head { margin-top: 22px; }
 .class-pane .hint { margin: 10px 0 0; }
 .class-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 18px; font-size: 13px; }
 .class-foot button { padding: 5px 12px; font-size: 12px; }

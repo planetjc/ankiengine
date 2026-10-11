@@ -204,9 +204,26 @@ export interface Exam {
   setBy?: 'person';
 }
 
+/**
+ * Something graded that is due rather than sat -- an assignment, a problem
+ * set, a lab report, a paper, a presentation. Kept beside the exams and
+ * shown with them; a deck is never sized to one.
+ */
+export interface Deadline {
+  id: string;
+  name: string;
+  /** YYYY-MM-DD, or null when the papers give none. */
+  date: string | null;
+  /** What is due, in the papers' words. */
+  what?: string;
+  /** "person" once the person has made or changed it by hand, as an exam's. */
+  setBy?: 'person';
+}
+
 interface ClassRecord {
   folder: string;
   exams: Exam[];
+  deadlines?: Deadline[];
   /** class.md's mtime when the person said it was right; a later write is unread again. */
   reviewedAt?: number;
   /** The papers class.md was last written from; one added since is not in the brief yet. */
@@ -217,6 +234,8 @@ export interface ClassSummary {
   folder: string;
   path: string;
   exams: Exam[];
+  /** Soonest first; one with no date last. */
+  deadlines: Deadline[];
   brief: 'none' | 'written' | 'reviewed';
   files: number;
   /** Papers added since the brief was written, which it does not know yet. */
@@ -228,9 +247,11 @@ function readClass(dir: string): ClassRecord | null {
   if (typeof data !== 'object' || data === null) return null;
   const d = data as Record<string, unknown>;
   if (typeof d.folder !== 'string' || !d.folder) return null;
-  const exams = Array.isArray(d.exams) ? d.exams.filter((e): e is Exam => typeof e === 'object' && e !== null && typeof (e as Exam).id === 'string' && typeof (e as Exam).name === 'string') : [];
+  const rows = <T extends { id: string; name: string }>(v: unknown): T[] => (Array.isArray(v) ? v.filter((e): e is T => typeof e === 'object' && e !== null && typeof (e as T).id === 'string' && typeof (e as T).name === 'string') : []);
+  const exams = rows<Exam>(d.exams);
+  const deadlines = rows<Deadline>(d.deadlines);
   const briefFrom = Array.isArray(d.briefFrom) ? d.briefFrom.filter((f): f is string => typeof f === 'string') : undefined;
-  return { folder: d.folder, exams, ...(typeof d.reviewedAt === 'number' ? { reviewedAt: d.reviewedAt } : {}), ...(briefFrom ? { briefFrom } : {}) };
+  return { folder: d.folder, exams, ...(deadlines.length ? { deadlines } : {}), ...(typeof d.reviewedAt === 'number' ? { reviewedAt: d.reviewedAt } : {}), ...(briefFrom ? { briefFrom } : {}) };
 }
 
 function writeClass(dir: string, record: ClassRecord): void {
@@ -246,21 +267,26 @@ function briefMtime(dir: string): number | null {
   }
 }
 
-/** A class's papers: what the person brought, at the top of its folder -- not what a step made in a subfolder. */
-function papersOf(dir: string): string[] {
+/**
+ * What the person brought, at the top of a folder -- a class's papers, a
+ * deck's lecture files -- not what a step made in a subfolder.
+ */
+function brought(dir: string): string[] {
   const files: { name: string; relPath: string; bytes: number; kind: string; mimeType: string }[] = [];
   listFiles(dir, dir, files);
   return files.filter((f) => !f.relPath.includes('/') && f.kind !== 'other').map((f) => f.relPath).sort();
 }
 
 function summarize(dir: string, record: ClassRecord): ClassSummary {
-  const papers = papersOf(dir);
+  const papers = brought(dir);
   const at = briefMtime(dir);
   const brief = at === null ? 'none' : record.reviewedAt === at ? 'reviewed' : 'written';
-  const exams = [...record.exams].sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
+  const soonest = (a: { date: string | null }, b: { date: string | null }) => (a.date ?? '9999').localeCompare(b.date ?? '9999');
+  const exams = [...record.exams].sort(soonest);
+  const deadlines = [...(record.deadlines ?? [])].sort(soonest);
   // A brief from before this was kept knows nothing of what it read, and is taken to have read everything.
   const newPapers = brief !== 'none' && record.briefFrom ? papers.filter((f) => !record.briefFrom!.includes(f)) : [];
-  return { folder: record.folder, path: dir, exams, brief, files: papers.length, newPapers };
+  return { folder: record.folder, path: dir, exams, deadlines, brief, files: papers.length, newPapers };
 }
 
 /** Every class under `root`, with its directory. */
@@ -292,34 +318,43 @@ function today(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** The two kinds of dated row a class keeps: how each is named, numbered and described. */
+const DATED = {
+  exams: { prefix: 'e', detail: 'covers', noun: 'exam' },
+  deadlines: { prefix: 'd', detail: 'what', noun: 'deadline' },
+} as const;
+
 /**
- * The exams as given, checked; one without an id is given the next free one.
- * `by` says who is changing them: an exam the person makes or changes is
- * theirs from then on (setBy); from the papers, each keeps whose it was.
+ * The exams, or the deadlines, as given, checked; one without an id is given
+ * the next free one. `by` says who is changing them: a row the person makes
+ * or changes is theirs from then on (setBy); from the papers, each keeps
+ * whose it was.
  */
-function examsFrom(raw: unknown, kept: Exam[], by: 'person' | 'papers' = 'person'): Exam[] {
-  if (!Array.isArray(raw)) throw new InvalidParams('params.exams must be an array');
+function datedFrom<T extends Exam | Deadline>(raw: unknown, kept: T[], kind: keyof typeof DATED, by: 'person' | 'papers' = 'person'): T[] {
+  const { prefix, detail, noun } = DATED[kind];
+  if (!Array.isArray(raw)) throw new InvalidParams(`params.${kind} must be an array`);
   const used = new Set<string>();
-  let n = Math.max(0, ...kept.map((e) => Number(/^e(\d+)$/.exec(e.id)?.[1] ?? 0)));
-  const out: Exam[] = [];
+  const number = new RegExp(`^${prefix}(\\d+)$`);
+  let n = Math.max(0, ...kept.map((e) => Number(number.exec(e.id)?.[1] ?? 0)));
+  const out: T[] = [];
   raw.forEach((x, i) => {
-    if (typeof x !== 'object' || x === null) throw new InvalidParams(`params.exams[${i}] must be an object`);
+    if (typeof x !== 'object' || x === null) throw new InvalidParams(`params.${kind}[${i}] must be an object`);
     const e = x as Record<string, unknown>;
     const name = typeof e.name === 'string' ? e.name.replace(/\s+/g, ' ').trim() : '';
-    if (!name) throw new InvalidParams(`params.exams[${i}].name must name the exam`);
+    if (!name) throw new InvalidParams(`params.${kind}[${i}].name must name the ${noun}`);
     const date = e.date === null || e.date === undefined || e.date === '' ? null : e.date;
-    if (date !== null && (typeof date !== 'string' || !DATE.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)))) throw new InvalidParams(`params.exams[${i}].date must be YYYY-MM-DD or null`);
+    if (date !== null && (typeof date !== 'string' || !DATE.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)))) throw new InvalidParams(`params.${kind}[${i}].date must be YYYY-MM-DD or null`);
     let id = typeof e.id === 'string' && e.id && !used.has(e.id) ? e.id : '';
     if (!id) {
       n += 1;
-      id = `e${n}`;
+      id = `${prefix}${n}`;
     }
     used.add(id);
-    const covers = typeof e.covers === 'string' ? e.covers.trim().slice(0, 500) : '';
-    const was = kept.find((k) => k.id === id);
-    const changed = !was || was.name !== name.slice(0, 120) || was.date !== date || (was.covers ?? '') !== covers;
+    const said = typeof e[detail] === 'string' ? (e[detail] as string).trim().slice(0, 500) : '';
+    const was = kept.find((k) => k.id === id) as Record<string, unknown> | undefined;
+    const changed = !was || was.name !== name.slice(0, 120) || was.date !== date || ((was[detail] as string | undefined) ?? '') !== said;
     const theirs = by === 'person' ? changed || was?.setBy === 'person' : e.setBy === 'person' || was?.setBy === 'person';
-    out.push({ id, name: name.slice(0, 120), date, ...(covers ? { covers } : {}), ...(theirs ? { setBy: 'person' as const } : {}) });
+    out.push({ id, name: name.slice(0, 120), date, ...(said ? { [detail]: said } : {}), ...(theirs ? { setBy: 'person' as const } : {}) } as T);
   });
   return out;
 }
@@ -561,6 +596,97 @@ function artifactsOf(path: string): { inventory: boolean; plan: boolean; deck: b
   return { inventory: has('inventory.md'), plan: has('plan.md'), deck: has('deck.json'), flags: has('flags.json'), review: has('review.html') };
 }
 
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+// What each step's file was written from, kept in the deck's record: the
+// materials extract read, and what each later step was given in turn. A file
+// added after a step ran is in none of them, and that step is behind by it
+// until it runs again on what was added (src/pipeline, additionStage). A
+// class keeps the same for its brief, as briefFrom.
+const MADE = ['inventory.md', 'plan.md', 'deck.json', 'audit.md'] as const;
+type MadeFile = (typeof MADE)[number];
+const MADE_KEY = { 'inventory.md': 'inventory', 'plan.md': 'plan', 'deck.json': 'deck', 'audit.md': 'audit' } as const;
+
+/** A step's file and what it covers: the materials it was written from, and those added before it since. */
+export interface Behind {
+  covers: string[];
+  added: string[];
+}
+
+export interface Coverage {
+  /** What the person brought: the top of the deck's folder. */
+  materials: string[];
+  /** Null where the step's file is not there. */
+  inventory: Behind | null;
+  plan: Behind | null;
+  deck: Behind | null;
+  audit: Behind | null;
+  /** The first card, counted from 1, that no audit has read: cards added after the deck's audit. */
+  unaudited: number | null;
+}
+
+function fromOf(meta: Record<string, unknown>): Partial<Record<MadeFile, string[]>> {
+  const from = meta.from;
+  if (typeof from !== 'object' || from === null || Array.isArray(from)) return {};
+  const out: Partial<Record<MadeFile, string[]>> = {};
+  for (const file of MADE) {
+    const list = (from as Record<string, unknown>)[file];
+    if (Array.isArray(list)) out[file] = list.filter((f): f is string => typeof f === 'string');
+  }
+  return out;
+}
+
+/**
+ * Each step's file against what it was given: inventory.md against the
+ * materials, plan.md against what inventory.md covers, and so on down. A
+ * file with no record covers all it was given -- a deck from before this
+ * was kept, until settleCoverage writes one.
+ */
+function coverageOf(path: string): Coverage {
+  const meta = deckMeta(path);
+  const materials = brought(path);
+  const from = fromOf(meta);
+  const out: Coverage = { materials, inventory: null, plan: null, deck: null, audit: null, unaudited: null };
+  let upstream = materials;
+  for (const file of MADE) {
+    if (!isFile(join(path, file))) continue;
+    const covers = from[file] ?? upstream;
+    out[MADE_KEY[file]] = { covers, added: upstream.filter((f) => !covers.includes(f)) };
+    upstream = covers;
+  }
+  const u = meta.unaudited;
+  if (out.audit && typeof u === 'number' && Number.isInteger(u) && u >= 1) out.unaudited = u;
+  return out;
+}
+
+/**
+ * Before material is added to a deck: a step's file with no record of what
+ * it was written from is taken to cover what is here now, and the record is
+ * written, so what is added next is new to it. A class's papers are kept
+ * apart (briefFrom).
+ */
+function settleCoverage(path: string): void {
+  if (readClass(path)) return;
+  const meta = deckMeta(path);
+  const from = fromOf(meta);
+  const now = coverageOf(path);
+  let changed = false;
+  for (const file of MADE) {
+    const b = now[MADE_KEY[file]];
+    if (b && !from[file]) {
+      from[file] = b.covers;
+      changed = true;
+    }
+  }
+  if (changed) writeFileSync(join(path, META), JSON.stringify({ ...meta, from }, null, 2) + '\n');
+}
+
 /** `name` resolved beneath `path`, or -32602 when it is the folder itself or climbs out of it. */
 function within(path: string, name: string): string {
   const root = resolve(path);
@@ -612,6 +738,8 @@ export function courseMethods(): Record<string, MethodHandler> {
         artifacts: artifactsOf(path),
         extracted: extractedFor(path, files),
         class: classOfCourse(path),
+        // A class's papers are its brief's (newPapers), not a deck's steps'.
+        coverage: readClass(path) ? null : coverageOf(path),
       };
     },
 
@@ -630,7 +758,11 @@ export function courseMethods(): Record<string, MethodHandler> {
           // By kind, what the person brought: top-level files only, since a subfolder is what the steps made.
           const kinds: Record<string, number> = {};
           for (const f of files) if (!f.relPath.includes('/')) kinds[f.kind] = (kinds[f.kind] ?? 0) + 1;
-          return { name: nameOf(path) ?? e.name, folder: e.name, path, files: files.length, pdfs: files.filter((f) => f.kind === 'pdf').length, kinds, artifacts: artifactsOf(path), modified: lastTouched(path).toISOString() };
+          // Files the furthest step there has not been given yet: material added to a deck already made.
+          const c = coverageOf(path);
+          const last = c.deck ?? c.plan ?? c.inventory;
+          const added = last ? c.materials.filter((f) => !last.covers.includes(f)).length : 0;
+          return { name: nameOf(path) ?? e.name, folder: e.name, path, files: files.length, pdfs: files.filter((f) => f.kind === 'pdf').length, kinds, artifacts: artifactsOf(path), added, modified: lastTouched(path).toISOString() };
         })
         .sort((a, b) => (a.modified < b.modified ? 1 : a.modified > b.modified ? -1 : 0));
       const kept = readFolders(root);
@@ -716,13 +848,16 @@ export function courseMethods(): Record<string, MethodHandler> {
       return summarize(dir, record);
     },
 
-    // The exams, whole: what the person sees is what is kept.
+    // The exams, or the deadlines, or both, whole: what the person sees is what is kept.
     'classes/update': (raw) => {
       const p = asParams(raw);
       const root = str(p, 'root');
       const { dir, record } = classIn(root, str(p, 'path'));
       if (p.by !== undefined && p.by !== 'person' && p.by !== 'papers') throw new InvalidParams('params.by must be "person" or "papers"');
-      const next: ClassRecord = { ...record, exams: examsFrom(p.exams, record.exams, p.by === 'papers' ? 'papers' : 'person') };
+      const by = p.by === 'papers' ? 'papers' : 'person';
+      const next: ClassRecord = { ...record };
+      if (p.exams !== undefined || p.deadlines === undefined) next.exams = datedFrom(p.exams, record.exams, 'exams', by);
+      if (p.deadlines !== undefined) next.deadlines = datedFrom(p.deadlines, record.deadlines ?? [], 'deadlines', by);
       writeClass(dir, next);
       return summarize(dir, next);
     },
@@ -745,7 +880,7 @@ export function courseMethods(): Record<string, MethodHandler> {
       const root = str(p, 'root');
       const { dir, record } = classIn(root, str(p, 'path'));
       if (briefMtime(dir) === null) throw new InvalidParams('params.path: the class has no class.md yet');
-      const next = { ...record, briefFrom: papersOf(dir) };
+      const next = { ...record, briefFrom: brought(dir) };
       writeClass(dir, next);
       return summarize(dir, next);
     },
@@ -897,12 +1032,41 @@ export function courseMethods(): Record<string, MethodHandler> {
       return { name: nameOf(path) ?? folder, folder, path };
     },
 
+    // A step's file was just written from these materials -- the app's
+    // record, made when the step finishes, of what it was given. Cards
+    // added to a deck already audited say where they start (newFrom), so
+    // the next audit reads those; cards written whole, or an audit, clear it.
+    'course/made': (raw) => {
+      const p = asParams(raw);
+      const path = str(p, 'path');
+      if (!isDirectory(path)) throw new Error(`${path} is not a directory`);
+      if (readClass(path)) throw new InvalidParams('params.path: a class keeps what its brief was written from itself (classes/briefed)');
+      const file = str(p, 'file');
+      if (!(MADE as readonly string[]).includes(file)) throw new InvalidParams(`params.file must be one of ${MADE.join(', ')}`);
+      if (!isFile(join(path, file))) throw new InvalidParams(`params.file: there is no ${file} in the folder`);
+      if (!Array.isArray(p.files) || p.files.some((f) => typeof f !== 'string' || !f)) throw new InvalidParams('params.files must be an array of file names');
+      const meta = deckMeta(path);
+      const next: Record<string, unknown> = { ...meta, from: { ...fromOf(meta), [file]: [...new Set(p.files as string[])].sort() } };
+      if (file === 'deck.json') {
+        const n = p.newFrom;
+        if (n === undefined || n === null) delete next.unaudited;
+        else {
+          if (typeof n !== 'number' || !Number.isInteger(n) || n < 1) throw new InvalidParams('params.newFrom must be a card number from 1, or null');
+          next.unaudited = typeof meta.unaudited === 'number' ? Math.min(meta.unaudited, n) : n;
+        }
+      }
+      if (file === 'audit.md') delete next.unaudited;
+      writeFileSync(join(path, META), JSON.stringify(next, null, 2) + '\n');
+      return { path, coverage: coverageOf(path) };
+    },
+
     'course/import': (raw) => {
       const p = asParams(raw);
       const path = str(p, 'path');
       if (!isDirectory(path)) throw new Error(`${path} is not a directory`);
       const sources = p.files;
       if (!Array.isArray(sources) || sources.some((f) => typeof f !== 'string' || f.length === 0)) throw new InvalidParams('params.files must be an array of paths');
+      settleCoverage(path);
       // A dropped folder brings its files, one level, minus dotfiles; the
       // folder itself is not recreated, so "the lecture folder" becomes "the
       // lecture's files" beside whatever was already here.
@@ -1020,6 +1184,9 @@ export function courseMethods(): Record<string, MethodHandler> {
       if (hasText === hasBase64) throw new InvalidParams('params: exactly one of `text` (UTF-8) or `base64` (bytes) must be given');
       const data = hasText ? Buffer.from(p.text as string, 'utf8') : Buffer.from(p.base64 as string, 'base64');
       if (existsSync(full) && !statSync(full).isFile()) throw new InvalidParams(`params.name: "${name}" is not a regular file`);
+      // A file the person brought, as the page adds one: the steps already run did not read it.
+      const rel = relative(resolve(path), full);
+      if (!rel.includes(sep) && !rel.startsWith('.') && classify(rel).kind !== 'other' && !(ARTIFACTS as readonly string[]).includes(rel)) settleCoverage(path);
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, data);
       return { name, bytes: data.length };

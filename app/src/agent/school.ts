@@ -1,6 +1,7 @@
 // The School view: the same library as Decks, seen as a student's year.
 // Semesters are sections -- the one under way first, those ahead after it,
-// past ones folded -- and each class in one is a card with its next exam.
+// past ones folded -- and each class in one is a card with its next exam and
+// what is due next. Coming up puts both on one calendar, the week's first.
 // A class opens to its own screen (class-steps.ts, class-pane.ts), where
 // its syllabus, exams and decks are. Decks outside any class are not shown
 // here; they are what the Decks view is for.
@@ -10,7 +11,7 @@
 // (course.ts). What this view adds is the order and the words.
 
 import type { ClassSummary, DeckSummary, Semester } from '../engine/client.js';
-import { canBeClass, countdown, defaultSemester, nextExam, nextTerm, orderSemesters, semesterOf, shortDate, termFromName, termRange, termState, upcomingExams } from './class-rules.js';
+import { canBeClass, countdown, defaultSemester, dueWhen, nextDeadline, nextExam, nextTerm, orderSemesters, semesterOf, shortDate, soon, termFromName, termRange, termState, upcoming } from './class-rules.js';
 import { splitName } from './deck-list.js';
 import { mountNotice } from './notice.js';
 
@@ -97,13 +98,15 @@ export function mountSchool(host: HTMLElement, opts: SchoolOptions): School {
   /** A class as a card: its name, what is next for it, and how far along its brief is. */
   function card(cls: ClassSummary, within: string | null): string {
     const next = nextExam(cls.exams);
+    const due = nextDeadline(cls.deadlines ?? []);
     const n = decksOf(cls);
     const fresh = cls.newPapers?.length ?? 0;
     const brief = fresh ? `${fresh} new doc${fresh === 1 ? '' : 's'} for the brief` : cls.brief === 'reviewed' ? 'brief read' : cls.brief === 'written' ? 'brief to read' : cls.files ? 'brief not written' : 'add the syllabus';
     const name = within ? cls.folder.slice(within.length + 2) : cls.folder;
     return `<button type="button" class="ccard${cls.path === openPath ? ' open' : ''}" data-open-class="${esc(cls.path)}" title="${esc(cls.folder)}">
       <span class="ccard-name">${esc(name)}</span>
-      <span class="ccard-exam${next ? '' : ' none'}">${next ? `${esc(next.name)} · ${esc(countdown(next.date!))}` : cls.exams.length ? 'no exam ahead' : 'no exams yet'}</span>
+      <span class="ccard-exam${next ? (soon(next.date!) ? ' soon' : '') : ' none'}">${next ? `${esc(next.name)} · ${esc(countdown(next.date!))}` : cls.exams.length ? 'no exam ahead' : 'no exams yet'}</span>
+      ${due ? `<span class="ccard-due${soon(due.date!) ? ' soon' : ''}">${esc(due.name)} · ${esc(dueWhen(due.date!))}</span>` : ''}
       <span class="ccard-meta">${n} deck${n === 1 ? '' : 's'} · ${esc(brief)}</span>
     </button>`;
   }
@@ -131,10 +134,13 @@ export function mountSchool(host: HTMLElement, opts: SchoolOptions): School {
   }
 
   function coming(list: ClassSummary[], within: string): string {
-    const up = upcomingExams(list, new Date(), 5);
+    const up = upcoming(list, new Date(), 6);
     if (!up.length) return '';
     return `<div class="coming"><div class="railhead">Coming up</div><ul class="hexams">${up
-      .map(({ exam, cls }) => `<li><span class="hx-date">${esc(shortDate(exam.date!))}</span><strong>${esc(exam.name)}</strong><button type="button" class="link hx-class" data-open-class="${esc(cls.path)}">${esc(cls.folder.slice(within.length + 2))}</button><span class="hx-when">${esc(countdown(exam.date!))}</span></li>`)
+      .map(
+        (u) =>
+          `<li class="${u.kind === 'due' ? 'hx-due' : 'hx-exam'}${soon(u.date) ? ' soon' : ''}"><span class="hx-date">${esc(shortDate(u.date))}</span><strong>${esc(u.name)}</strong><button type="button" class="link hx-class" data-open-class="${esc(u.cls.path)}">${esc(u.cls.folder.slice(within.length + 2))}</button><span class="hx-when">${esc(u.kind === 'due' ? dueWhen(u.date) : countdown(u.date))}</span></li>`,
+      )
       .join('')}</ul></div>`;
   }
 
@@ -159,8 +165,8 @@ export function mountSchool(host: HTMLElement, opts: SchoolOptions): School {
         <p><strong>School keeps a class together:</strong> its syllabus, its exam dates, and its decks.</p>
         <ul>
           <li>Drop the syllabus on a class once. The agent reads it into a brief that every deck in the class is given — what is off the exam, how the exams are set, the course's terms.</li>
-          <li>Exam dates come from the syllabus for you to check. Each deck is sized to what you can review before its exam, at your own new cards a day.</li>
-          <li>Classes sit in semesters, and the one under way comes first, with what is coming up.</li>
+          <li>Exam dates and deadlines come from the syllabus for you to check. Each deck is sized to what you can review before its exam, at your own new cards a day.</li>
+          <li>Classes sit in semesters, and the one under way comes first, with every exam and deadline coming up — this week's marked.</li>
         </ul>
         <p><button type="button" data-first-class>Make your first class</button></p>
         ${outside ? `<p class="muted">Your ${outside} deck${outside === 1 ? ' is' : 's are'} in <button type="button" class="link" data-decks>Decks</button>, as before.</p>` : ''}

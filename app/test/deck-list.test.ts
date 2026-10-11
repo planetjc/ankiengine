@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { DeckSummary } from '../src/engine/client.ts';
-import { arrange, folderTree, foldersOf, material, matches, splitName, when, type FolderNode } from '../src/agent/deck-list.ts';
+import { arrange, deckStatus, folderTree, foldersOf, material, matches, splitName, when, type FolderNode } from '../src/agent/deck-list.ts';
 
 const deck = (name: string, modified: string, extra: Partial<DeckSummary> = {}): DeckSummary => ({
   name,
@@ -61,4 +61,12 @@ test('when: today, yesterday, days, then a date', () => {
   assert.equal(when(new Date(2026, 8, 24, 23).toISOString(), now), 'yesterday');
   assert.equal(when(new Date(2026, 8, 21).toISOString(), now), '4 days ago');
   assert.match(when(new Date(2026, 7, 1).toISOString(), now), /Aug/);
+});
+
+test('a deck with files added after its steps ran says so, until the cards have them', () => {
+  const made = { inventory: true, plan: true, deck: true, flags: false, review: false };
+  assert.equal(deckStatus(deck('A', '2026-09-27T00:00:00Z', { files: 3, artifacts: made, added: 2 })), '2 files added — not in the cards yet');
+  assert.equal(deckStatus(deck('A', '2026-09-27T00:00:00Z', { files: 2, artifacts: made, added: 1 })), '1 file added — not in the cards yet');
+  assert.equal(deckStatus(deck('A', '2026-09-27T00:00:00Z', { files: 2, artifacts: made, added: 0 })), 'cards written — preview, audit, export');
+  assert.equal(deckStatus(deck('B', '2026-09-27T00:00:00Z', { files: 2, added: 2 })), 'materials added — next: extract', 'nothing made yet: every file is simply material');
 });

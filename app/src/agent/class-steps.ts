@@ -1,14 +1,14 @@
 // A class's one step, as a line under its docs and the gate while a class is open: the
 // agent reads the class's own papers -- the syllabus, exam guides, the
 // schedule -- into class.md, which every deck in the class is then given,
-// and names the exams it found in exams.json, which join the class's exams
-// for the person to check. Nothing here is a card; the deck steps are
+// and names the exams and deadlines it found in exams.json, which join the
+// class's own for the person to check. Nothing here is a card; the deck steps are
 // stages.ts's, and do not run while a class is open.
 
 import { CLASS_STAGE, classUpdateStage, makeRunner, type Runner } from '../../../dist/pipeline/index.js';
 import { EngineError, type ClassSummary, type ConnectResult, type SidecarClient } from '../engine/client.js';
 import type { Bus } from './bus.js';
-import { mergeExams, parseFoundExams, shortDate } from './class-rules.js';
+import { mergeDeadlines, mergeExams, parseFoundDates, shortDate } from './class-rules.js';
 import type { Directive } from './steps-note.js';
 
 const QUIET_MS = 60_000;
@@ -200,28 +200,34 @@ export function mountClassSteps(line: HTMLElement, gate: HTMLElement, host: Clas
   }
 
   /**
-   * exams.json into the class's exams: new ones added, a missing date or
-   * coverage filled in, nothing the person set overwritten. Then it goes,
-   * so an exam the person deletes is not brought back by the next look.
+   * exams.json into the class's exams and deadlines: new ones added, a
+   * missing date or line filled in, nothing the person set overwritten. Then
+   * it goes, so a row the person deletes is not brought back by the next look.
    */
   async function takeExams(cls: ClassSummary): Promise<string> {
     const text = await sidecar.readCourse(cls.path, 'exams.json').then((r) => r.text, () => null);
     if (text === null) return '';
-    const found = parseFoundExams(text);
-    const { exams, added, filled, moved, differ } = mergeExams(cls.exams, found);
-    // Written as the papers': an exam keeps whose it was, so the next paper can move this one's date.
-    if (added || filled || moved.length) host.changed(await sidecar.updateClass(host.decksRoot, cls.path, exams, 'papers'));
+    const found = parseFoundDates(text);
+    const ex = mergeExams(cls.exams, found.exams);
+    const dl = mergeDeadlines(cls.deadlines ?? [], found.deadlines);
+    const examsChanged = ex.added || ex.filled || ex.moved.length;
+    const deadlinesChanged = dl.added || dl.filled || dl.moved.length;
+    // Written as the papers': a row keeps whose it was, so the next paper can move this one's date.
+    if (examsChanged || deadlinesChanged)
+      host.changed(await sidecar.updateClass(host.decksRoot, cls.path, { ...(examsChanged ? { exams: ex.exams } : {}), ...(deadlinesChanged ? { deadlines: dl.rows } : {}) }, 'papers'));
     await sidecar.deleteCourse(cls.path, 'exams.json').catch(() => undefined);
-    if (!found.length) return 'The docs named no exams.';
-    const undated = exams.filter((e) => !e.date).length;
+    if (!found.exams.length && !found.deadlines.length) return 'The docs named no exams and nothing due.';
     const when = (d: string) => shortDate(d);
+    const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
     const parts = [
-      added ? `${added} exam${added === 1 ? '' : 's'} added from the docs` : '',
-      filled ? `${filled} filled in` : '',
-      ...moved.map((m) => `${m.name} moved to ${when(m.to)} (was ${when(m.from)})`),
+      ex.added ? `${count(ex.added, 'exam')} added from the docs` : '',
+      dl.added ? `${count(dl.added, 'deadline')} added` : '',
+      ex.filled + dl.filled ? `${ex.filled + dl.filled} filled in` : '',
+      ...[...ex.moved, ...dl.moved].map((m) => `${m.name} moved to ${when(m.to)} (was ${when(m.from)})`),
     ].filter(Boolean);
-    const theirs = differ.map((d) => `the docs put ${d.name} on ${when(d.papers)}; you set ${when(d.yours)}, and yours stands — change it under Exams if they are right`);
-    return `${[parts.length ? parts.join('; ') : 'No change to the exams', ...theirs].join('. ')}${undated ? `. ${undated} without a date — add ${undated === 1 ? 'it' : 'them'} under Exams` : ''}. Check the dates under Exams: they are what the decks are sized to.`;
+    const theirs = [...ex.differ, ...dl.differ].map((d) => `the docs put ${d.name} on ${when(d.papers)}; you set ${when(d.yours)}, and yours stands — change it on the class if they are right`);
+    const undated = ex.exams.filter((e) => !e.date).length + dl.rows.filter((d) => !d.date).length;
+    return `${[parts.length ? parts.join('; ') : 'No change to the exams or deadlines', ...theirs].join('. ')}${undated ? `. ${undated} without a date — add ${undated === 1 ? 'it' : 'them'} on the class` : ''}. Check the exam dates: they are what the decks are sized to.`;
   }
 
   /** The brief, written from every paper -- or, given the papers added since it was, brought up to date from those. */
@@ -287,9 +293,9 @@ export function mountClassSteps(line: HTMLElement, gate: HTMLElement, host: Clas
     if (!cls) return '';
     const state = cls.brief === 'none' ? 'not written yet' : cls.brief === 'written' ? 'written, and not yet read by the person' : 'written and read by the person';
     return [
-      `[From the A.P.E. app, not typed by the person.] This is the class ${cls.folder}, not a deck. Its folder holds the class's own papers -- the syllabus, exam guides, the schedule -- and its one step is the class brief: reading those papers by the method's step 0 into class.md beside them, with exams.json for the exams. Every deck in the class is given class.md at each of its steps.`,
+      `[From the A.P.E. app, not typed by the person.] This is the class ${cls.folder}, not a deck. Its folder holds the class's own papers -- the syllabus, exam guides, the schedule -- and its one step is the class brief: reading those papers by the method's step 0 into class.md beside them, with exams.json for the exams and deadlines. Every deck in the class is given class.md at each of its steps.`,
       `The class brief is ${state}. No cards are made here.`,
-      'When the person asks for a change to the brief, edit class.md in this folder. Exam dates are kept by the app, under Exams, where the person changes them.',
+      'When the person asks for a change to the brief, edit class.md in this folder. Exam and deadline dates are kept by the app, under Exams and Deadlines, where the person changes them.',
     ].join('\n');
   }
 

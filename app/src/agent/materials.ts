@@ -28,7 +28,7 @@ export interface Materials {
   count(): number;
   /** A deck's lecture files, or a class's own papers: only the words change. */
   setKind(kind: 'deck' | 'class'): void;
-  /** A class's papers its brief has not read yet, marked on their tiles. */
+  /** Files the steps have not read yet, marked on their tiles: a class's papers its brief does not know, a deck's files added after its cards were made. */
   markNew(relPaths: string[]): void;
 }
 
@@ -113,7 +113,8 @@ export function mountMaterials(host: HTMLElement, opts: MaterialsOptions): Mater
     const e = extracted.find((x) => x.source === f.relPath);
     const name = f.relPath.includes('/') ? f.relPath : f.name;
     const isNew = fresh.has(f.relPath);
-    return `<div class="tile kind-${f.kind}${isNew ? ' fresh' : ''}" title="${esc(f.relPath)}${isNew ? ' — not in the class brief yet' : ''}"><div class="tkind">${KIND[f.kind]}</div><div class="tname">${esc(name)}</div><div class="tmeta">${esc(describe(f, e))}${isNew ? ' · <span class="tnew">not in the brief yet</span>' : ''}</div><button type="button" class="tremove" data-remove="${esc(f.relPath)}" title="Remove ${esc(f.name)}" aria-label="Remove ${esc(f.name)}">×</button></div>`;
+    const why = kind === 'class' ? ['not in the class brief yet', 'not in the brief yet'] : ['added after the deck was made', 'new — not in the cards yet'];
+    return `<div class="tile kind-${f.kind}${isNew ? ' fresh' : ''}" title="${esc(f.relPath)}${isNew ? ` — ${why[0]}` : ''}"><div class="tkind">${KIND[f.kind]}</div><div class="tname">${esc(name)}</div><div class="tmeta">${esc(describe(f, e))}${isNew ? ` · <span class="tnew">${why[1]}</span>` : ''}</div><button type="button" class="tremove" data-remove="${esc(f.relPath)}" title="Remove ${esc(f.name)}" aria-label="Remove ${esc(f.name)}">×</button></div>`;
   };
 
   function render(extracted: Extracted[]): void {

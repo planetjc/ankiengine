@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { CLASS_STAGE, classUpdateStage, describeExtracted, makeRunner, stageBlocks, timeLine, WRITING_STAGES, type ContentBlock, type CourseClassLike, type PipelineClient } from '../../dist/pipeline/index.js';
+import { CLASS_STAGE, additionStage, auditBlocks, classUpdateStage, describeExtracted, makeRunner, stageBlocks, timeLine, WRITING_STAGES, type ContentBlock, type CourseClassLike, type PipelineClient } from '../../dist/pipeline/index.js';
 
 const EXTRACT = WRITING_STAGES[0]!;
 const PDF = { relPath: 'L.pdf', kind: 'pdf', bytes: 4096, mimeType: 'application/pdf' };
@@ -156,4 +156,50 @@ test('papers added after the brief are folded into it, named, rather than the br
   assert.match(t, /^class\.md is already written beside the class's papers.*These papers were added since:\n- study guide\.pdf\n- notes\.txt\nRead each of them end to end and fold what they add into class\.md/s);
   assert.match(t, /Then write exams\.json again/);
   assert.match(t, /\n\nClass: Year 1::Histology\nClass folder: \/classes\/histo/);
+});
+
+test('the class brief asks for the deadlines beside the exams, in one exams.json', async () => {
+  const own: CourseClassLike = { ...HISTO, path: '/classes/histo', exam: null };
+  for (const stage of [CLASS_STAGE, classUpdateStage(['study guide.pdf'])]) {
+    const t = textOf(await stageBlocks(inClass(own), stage, '/classes/histo', 'Year 1::Histology', { today: TODAY }));
+    assert.match(t, /exams\.json[^]*\{"exams": \[\.\.\.\], "deadlines": \[\.\.\.\]\}/);
+    assert.match(t, /"deadlines" has one object per graded thing the papers say is due rather than sat/);
+    assert.match(t, /"what": "<what else they say of it/);
+  }
+});
+
+test('files added to a made deck: each writing step adds to its file, for those files alone', async () => {
+  const [extract, organize, cards] = WRITING_STAGES as [typeof EXTRACT, typeof EXTRACT, typeof EXTRACT];
+  const added = ['study guide.pdf', 'notes.txt'];
+  const e = additionStage(extract, added);
+  assert.equal(e.method, '1-extract.md', 'the same method');
+  assert.equal(e.artifact, 'inventory.md');
+  assert.match(e.ask, /^inventory\.md is already written[^]*added to the deck since:\n- study guide\.pdf\n- notes\.txt\n/);
+  assert.match(e.ask, /under one new heading, "## Added: study guide\.pdf, notes\.txt"/);
+  assert.match(e.ask, /Leave every line already there as it is/);
+  assert.equal(e.companions, extract.companions, 'SETUP.md still goes with it');
+  const o = additionStage(organize, added);
+  assert.equal(o.time, true, 'organize is still told the exam and the room');
+  assert.match(o.ask, /Plan cards for those facts only, at the end of plan\.md/);
+  const c = additionStage(cards, added);
+  assert.match(c.ask, /add them to the end of the notes array in deck\.json/);
+  assert.match(c.ask, /Do not change, reorder or remove any note already in deck\.json/);
+  assert.match(c.ask, /top-level "media" array/, 'the media rule comes with it');
+  assert.throws(() => additionStage(CLASS_STAGE, added), /class brief has no addition/);
+  const b = await stageBlocks(client(), e, '/c', 'Deck');
+  assert.match(textOf(b), /^inventory\.md is already written/);
+  assert.match(textOf(b), /\n\nDeck: Deck\nCourse folder: \/c\n\nMaterials:\n- L\.pdf/, 'the listing follows as for any stage');
+});
+
+test('an audit of the cards added since the last one says where they start and what they came from', async () => {
+  const whole = textOf(await auditBlocks(client(), '/c'));
+  assert.doesNotMatch(whole, /added since/);
+  const some = textOf(await auditBlocks(client(), '/c', { from: 41, files: ['study guide.pdf'] }));
+  assert.match(some, /^Audit the deck in the course folder below\. Cards #41 onward were added since this deck was last audited, from files added to it later \(study guide\.pdf\)/);
+  assert.match(some, /read the earlier ones only to catch an added card that repeats or contradicts one of them/);
+  const sent: ContentBlock[][] = [];
+  const c = client({ prompt: async (_id, blocks) => (sent.push(blocks), { stopReason: 'end_turn' }) });
+  const runner = makeRunner(c, { connectionId: 'k', session: { sessionId: 'w' } } as never, '/c', () => 'Deck');
+  await runner.audit({ from: 7, files: ['x.pdf'] });
+  assert.match(textOf(sent[0]!), /Cards #7 onward/);
 });

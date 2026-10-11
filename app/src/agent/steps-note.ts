@@ -25,14 +25,21 @@ export interface Step {
   about: string;
 }
 
-/** The note: where the deck stands, and how to move it. */
-export function stepsNote(steps: Step[], deck: string): string {
+/**
+ * The note: where the deck stands, and how to move it. `added` names files
+ * the person added after the deck's steps ran: the steps run again on just
+ * those, adding to each file rather than starting over.
+ */
+export function stepsNote(steps: Step[], deck: string, added: string[] = []): string {
   const running = steps.find((s) => s.state === 'running');
   const next = steps.find((s) => s.state === 'next');
   const lines = steps.map((s, i) => `  ${i + 1}. ${s.stage} — ${s.state}${s.state === 'done' || s.state === 'running' ? '' : ` (${s.about})`}`);
   return [
     `[From the A.P.E. app, not typed by the person.] The person makes this deck${deck ? ` (${deck})` : ''} in eight steps, shown in the app's sidebar. The app starts each step itself and shows the person what a step wrote before the next one begins:`,
     ...lines,
+    ...(added.length
+      ? [`Files added to this deck after its steps ran: ${added.join(', ')}. The steps run again on those alone, each adding to its file -- inventory.md, plan.md, deck.json -- and leaving what is there as it is; the cards already written may be in Anki.`]
+      : []),
     running ? `Running now: ${running.stage}.` : next ? `Nothing is running; next is ${next.stage}.` : 'Nothing is running.',
     'Keep to the step in front of you. Do not start another step\'s work on your own, and do not redo a step that is done unless the person asks.',
     'You can move the sidebar by ending your reply with a line of its own, one per action:',

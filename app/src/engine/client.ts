@@ -147,7 +147,27 @@ export interface DeckSummary {
   /** What the person brought, by CourseFile kind; what the steps made in subfolders is not counted. Absent from an older engine. */
   kinds?: Partial<Record<CourseFile['kind'], number>>;
   artifacts: { inventory: boolean; plan: boolean; deck: boolean; flags: boolean; review: boolean };
+  /** Files added since the furthest step there was written, which it has not been given. Absent from an older engine. */
+  added?: number;
   modified: string;
+}
+
+/** A step's file and what it covers: the materials it was written from, and those added before it since. */
+export interface Behind {
+  covers: string[];
+  added: string[];
+}
+
+/** What each of a deck's step files was written from (course/list's `coverage`); null for a class's own folder. */
+export interface Coverage {
+  /** What the person brought: the top of the deck's folder. */
+  materials: string[];
+  inventory: Behind | null;
+  plan: Behind | null;
+  deck: Behind | null;
+  audit: Behind | null;
+  /** The first card, from 1, that no audit has read; null when the audit read them all. */
+  unaudited: number | null;
 }
 
 export interface Exam {
@@ -160,6 +180,17 @@ export interface Exam {
   setBy?: 'person';
 }
 
+/** Something graded that is due rather than sat: an assignment, a lab report, a paper. Shown with the exams; no deck is sized to one. */
+export interface Deadline {
+  id: string;
+  name: string;
+  /** YYYY-MM-DD, or null when none is known. */
+  date: string | null;
+  /** What is due, in the papers' words. */
+  what?: string;
+  setBy?: 'person';
+}
+
 /** A folder whose decks share a syllabus: its own files, the brief written from them, its exams. */
 export interface ClassSummary {
   /** The folder it is, as Anki's `::` path. */
@@ -168,6 +199,8 @@ export interface ClassSummary {
   path: string;
   /** Soonest first; an exam with no date last. */
   exams: Exam[];
+  /** Soonest first, as the exams. Absent from an engine before deadlines were kept. */
+  deadlines?: Deadline[];
   /** class.md: not written, written and not yet read, or read and said to be right (that version of it). */
   brief: 'none' | 'written' | 'reviewed';
   files: number;
@@ -266,8 +299,11 @@ export function makeSidecarClient(host: EngineHost) {
     listMethod: () => call<{ dir: string; files: { name: string; title: string; bytes: number }[] }>('method/list'),
     readMethod: (name: string) => call<{ name: string; text: string }>('method/read', { name }),
     listCourse: (path: string) =>
-      call<{ path: string; name: string | null; files: CourseFile[]; artifacts: { inventory: boolean; plan: boolean; deck: boolean; flags: boolean; review: boolean }; extracted: Extracted[]; class?: CourseClass | null }>('course/list', { path }),
+      call<{ path: string; name: string | null; files: CourseFile[]; artifacts: { inventory: boolean; plan: boolean; deck: boolean; flags: boolean; review: boolean }; extracted: Extracted[]; class?: CourseClass | null; coverage?: Coverage | null }>('course/list', { path }),
     readCourse: (path: string, name: string) => call<{ name: string; text: string; bytes: number }>('course/read', { path, name }),
+    /** A step's file was just written from these materials; cards added to an audited deck say where they start. */
+    madeFrom: (path: string, file: 'inventory.md' | 'plan.md' | 'deck.json' | 'audit.md', files: string[], newFrom?: number | null) =>
+      call<{ path: string; coverage: Coverage }>('course/made', { path, file, files, ...(newFrom !== undefined ? { newFrom } : {}) }),
     /** Copies files (or a folder's files, one level) into the course folder by name: the desktop shell's drop and picker. */
     importCourse: (path: string, files: string[]) => call<{ imported: string[] }>('course/import', { path, files }),
     /** Removes one file beneath the course folder, and what was extracted from it; with `trash`, into the folder's trash for restoreCourse. */
@@ -290,8 +326,9 @@ export function makeSidecarClient(host: EngineHost) {
     removeSemester: (root: string, folder: string) => call<{ removed: Semester; semesters: Semester[] }>('semesters/remove', { root, folder }),
     /** Makes a folder a class (the folder too, if it is new); refused inside another class or around one. */
     createClass: (root: string, folder: string) => call<ClassSummary>('classes/create', { root, folder }),
-    /** The class's exams, whole; one without an id is given one. */
-    updateClass: (root: string, path: string, exams: (Omit<Exam, 'id'> & { id?: string })[], by: 'person' | 'papers' = 'person') => call<ClassSummary>('classes/update', { root, path, exams, by }),
+    /** The class's exams, or its deadlines, or both, each list whole; a row without an id is given one. */
+    updateClass: (root: string, path: string, rows: { exams?: (Omit<Exam, 'id'> & { id?: string })[]; deadlines?: (Omit<Deadline, 'id'> & { id?: string })[] }, by: 'person' | 'papers' = 'person') =>
+      call<ClassSummary>('classes/update', { root, path, ...rows, by }),
     /** class.md was just written, from the papers there now; one added later is named in newPapers until it is updated. */
     briefedClass: (root: string, path: string) => call<ClassSummary>('classes/briefed', { root, path }),
     /** The person has read class.md, as it is now, and says it is right. */

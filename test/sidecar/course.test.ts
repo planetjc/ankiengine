@@ -138,6 +138,10 @@ const SKIPPED = ['.DS_Store', '.hidden/secret.md', 'node_modules/x/index.js'];
 const ARTIFACTS = ['inventory.md', 'plan.md', 'deck.json', 'flags.json', 'review.html', 'audit.md', 'audit.json', 'verdicts.md', 'out.apkg'];
 const NO_ARTIFACTS = { inventory: false, plan: false, deck: false, flags: false, review: false };
 const EXPECTED_FILES = COURSE_FILES.map(([relPath, content, kind, mimeType]) => ({ name: basename(relPath), relPath, bytes: bytesOf(content), kind, mimeType }));
+/** What the person brought: the top of the folder, not a subfolder, not an unknown kind. */
+const MATERIALS = ['data.json', 'deck.pptx', 'handout.docx', 'lecture.pdf', 'notes.md', 'slide.png', 'transcript.vtt'];
+const COVERED = { covers: MATERIALS, added: [] };
+const NO_COVERAGE = { materials: MATERIALS, inventory: null, plan: null, deck: null, audit: null, unaudited: null };
 
 /** `<root>/course` holding COURSE_FILES (written in reverse order), the skipped entries, `artifacts`; plus `<root>/outside.md`. */
 function makeCourseTree(artifacts: string[] = []): { root: string; dir: string } {
@@ -160,7 +164,7 @@ test('course/list: every regular file recursively, sorted by relPath, dotfiles a
   await s.ready;
   const res = await s.request(1, 'course/list', { path: dir });
   assert.equal(res.error, undefined, JSON.stringify(res.error));
-  assert.deepStrictEqual(res.result, { path: dir, name: null, files: EXPECTED_FILES, artifacts: NO_ARTIFACTS, extracted: [], class: null });
+  assert.deepStrictEqual(res.result, { path: dir, name: null, files: EXPECTED_FILES, artifacts: NO_ARTIFACTS, extracted: [], class: null, coverage: NO_COVERAGE });
   assert.equal(await s.end(), 0);
 });
 
@@ -171,8 +175,10 @@ test('course/list: artifacts are reported, never listed as files; *.apkg is skip
   await s.ready;
   const full = await s.request(1, 'course/list', { path: all.dir });
   assert.equal(full.error, undefined, JSON.stringify(full.error));
-  assert.deepStrictEqual(full.result, { path: all.dir, name: null, files: EXPECTED_FILES, artifacts: { inventory: true, plan: true, deck: true, flags: true, review: true }, extracted: [], class: null });
-  assert.deepStrictEqual((await s.request(2, 'course/list', { path: planOnly.dir })).result, { path: planOnly.dir, name: null, files: EXPECTED_FILES, artifacts: { ...NO_ARTIFACTS, plan: true }, extracted: [], class: null });
+  // With no record of what they were written from, the step files cover what is there.
+  const all4 = { materials: MATERIALS, inventory: COVERED, plan: COVERED, deck: COVERED, audit: COVERED, unaudited: null };
+  assert.deepStrictEqual(full.result, { path: all.dir, name: null, files: EXPECTED_FILES, artifacts: { inventory: true, plan: true, deck: true, flags: true, review: true }, extracted: [], class: null, coverage: all4 });
+  assert.deepStrictEqual((await s.request(2, 'course/list', { path: planOnly.dir })).result, { path: planOnly.dir, name: null, files: EXPECTED_FILES, artifacts: { ...NO_ARTIFACTS, plan: true }, extracted: [], class: null, coverage: { ...NO_COVERAGE, plan: COVERED } });
   assert.equal(await s.end(), 0);
 });
 
@@ -306,7 +312,7 @@ test('classes: a folder made a class keeps its papers apart, lists its exams, re
   const made = (await s.request(1, 'classes/create', { root, folder: 'Year 1 :: Histology' })).result as ClassResult;
   assert.equal(made.folder, 'Year 1::Histology', 'the folder is kept as Anki would read it');
   assert.equal(dirname(made.path), join(root, '.classes'), 'its papers live in a dot folder, never listed as a deck');
-  assert.deepStrictEqual({ ...made, path: '' }, { folder: 'Year 1::Histology', path: '', exams: [], brief: 'none', files: 0, newPapers: [] });
+  assert.deepStrictEqual({ ...made, path: '' }, { folder: 'Year 1::Histology', path: '', exams: [], deadlines: [], brief: 'none', files: 0, newPapers: [] });
   const listed = (await s.request(2, 'decks/list', { root })).result as { decks: unknown[]; folders: string[]; classes: ClassResult[] };
   assert.deepStrictEqual(listed.decks, [], 'the class folder is not a deck');
   assert.deepStrictEqual(listed.folders, ['Year 1', 'Year 1::Histology'], 'its folder exists before any deck is in it');
@@ -650,3 +656,105 @@ test('course/write refuses an escaping name, the folder itself, a directory, bot
   assert.equal(existsSync(join(dir, 'a.md')), false, 'nothing was written by a refused call');
   assert.equal(await s.end(), 0);
 })
+
+interface DeadlineRow { id: string; name: string; date: string | null; what?: string; setBy?: string }
+
+test('classes: deadlines are kept beside the exams, numbered apart, and a deck is never studied for one', { timeout: TIMEOUT }, async () => {
+  const root = join(makeTmpDir(), 'decks');
+  const s = spawnSidecar();
+  await s.ready;
+  const made = (await s.request(1, 'classes/create', { root, folder: 'Bio' })).result as ClassResult;
+  await s.request(2, 'classes/update', { root, path: made.path, exams: [{ name: 'Midterm', date: dayFromToday(20) }] });
+  const soon = dayFromToday(3);
+  const upd = (await s.request(3, 'classes/update', { root, path: made.path, by: 'papers', deadlines: [{ name: 'Paper', date: null }, { name: ' Lab  report 1 ', date: soon, what: 'Bone histology, 10%' }] })).result as ClassResult & { deadlines: DeadlineRow[] };
+  assert.deepStrictEqual(upd.deadlines, [
+    { id: 'd2', name: 'Lab report 1', date: soon, what: 'Bone histology, 10%' },
+    { id: 'd1', name: 'Paper', date: null },
+  ], 'numbered apart from the exams; from the papers, so not the person\'s; soonest first');
+  assert.deepStrictEqual(upd.exams.map((e) => e.name), ['Midterm'], 'given only deadlines, the exams stay');
+  const later = dayFromToday(4);
+  const edited = (await s.request(4, 'classes/update', { root, path: made.path, deadlines: [{ id: 'd2', name: 'Lab report 1', date: later, what: 'Bone histology, 10%' }, { id: 'd1', name: 'Paper', date: null }] })).result as ClassResult & { deadlines: DeadlineRow[] };
+  assert.deepStrictEqual(edited.deadlines.map((d) => [d.id, d.date, d.setBy]), [['d2', later, 'person'], ['d1', null, undefined]], 'changed by hand, it is the person\'s; the other stays the papers\'');
+  expectParamError(await s.request(5, 'classes/update', { root, path: made.path, deadlines: [{ name: ' ' }] }), 'deadlines', 'no name');
+  expectParamError(await s.request(6, 'classes/update', { root, path: made.path, deadlines: 'Lab report' }), 'deadlines', 'not a list');
+  expectParamError(await s.request(7, 'classes/update', { root, path: made.path }), 'exams', 'neither list');
+  const deck = (await s.request(8, 'decks/create', { root, name: 'Bio::Lecture 1' })).result as { path: string };
+  const cls = ((await s.request(9, 'course/list', { path: deck.path })).result as { class: ClassResult }).class;
+  assert.equal(cls.exam?.name, 'Midterm', 'the lab report is due first, and the deck is still studied for the exam');
+  const listed = (await s.request(10, 'decks/list', { root })).result as { classes: (ClassResult & { deadlines: DeadlineRow[] })[] };
+  assert.equal(listed.classes[0]!.deadlines.length, 2);
+  assert.equal(await s.end(), 0);
+});
+
+interface CoverageResult {
+  materials: string[];
+  inventory: { covers: string[]; added: string[] } | null;
+  plan: { covers: string[]; added: string[] } | null;
+  deck: { covers: string[]; added: string[] } | null;
+  audit: { covers: string[]; added: string[] } | null;
+  unaudited: number | null;
+}
+
+test('coverage: a file added after the steps ran is new to each of them, down the line, until each is written from it', { timeout: TIMEOUT }, async () => {
+  const root = join(makeTmpDir(), 'decks');
+  const src = makeTmpDir();
+  const s = spawnSidecar();
+  await s.ready;
+  const deck = (await s.request(1, 'decks/create', { root, name: 'Bio::Lecture 1' })).result as { path: string };
+  await s.request(2, 'course/import', { path: deck.path, files: [writeTmpFile(src, 'lecture.pdf', '%PDF-1.4\n')] });
+  let id = 10;
+  const coverage = async (): Promise<CoverageResult> => ((await s.request(id++, 'course/list', { path: deck.path })).result as { coverage: CoverageResult }).coverage;
+  const made = async (params: Record<string, unknown>): Promise<CoverageResult> => {
+    const r = await s.request(id++, 'course/made', { path: deck.path, ...params });
+    assert.equal(r.error, undefined, JSON.stringify(r.error));
+    return (r.result as { coverage: CoverageResult }).coverage;
+  };
+  const added = async (): Promise<number> => ((await s.request(id++, 'decks/list', { root })).result as { decks: { added: number }[] }).decks[0]!.added;
+  assert.deepStrictEqual(await coverage(), { materials: ['lecture.pdf'], inventory: null, plan: null, deck: null, audit: null, unaudited: null }, 'no step has written anything');
+
+  // Steps that ran before this record was kept cover what is there.
+  for (const f of ['inventory.md', 'plan.md', 'audit.md']) writeFileSync(join(deck.path, f), '# x\n');
+  writeFileSync(join(deck.path, 'deck.json'), JSON.stringify({ notes: [{ deckName: 'Bio::Lecture 1' }, { deckName: 'Bio::Lecture 1' }] }));
+  const one = { covers: ['lecture.pdf'], added: [] };
+  assert.deepStrictEqual(await coverage(), { materials: ['lecture.pdf'], inventory: one, plan: one, deck: one, audit: one, unaudited: null });
+
+  // A file added now is new to every step: the import writes down what each covered first.
+  await s.request(3, 'course/import', { path: deck.path, files: [writeTmpFile(src, 'study guide.pdf', '%PDF-1.4\n')] });
+  const both = ['lecture.pdf', 'study guide.pdf'];
+  const late = { covers: ['lecture.pdf'], added: ['study guide.pdf'] };
+  let c = await coverage();
+  assert.deepStrictEqual([c.inventory, c.plan, c.deck, c.audit], [late, one, one, one], 'the plan is behind the inventory, not the materials');
+  assert.equal(await added(), 1, 'the deck list counts it');
+
+  // Each step written from it passes it down to the next.
+  c = await made({ file: 'inventory.md', files: both });
+  assert.deepStrictEqual([c.inventory, c.plan], [{ covers: both, added: [] }, late]);
+  c = await made({ file: 'plan.md', files: both });
+  assert.deepStrictEqual(c.deck, late);
+  c = await made({ file: 'deck.json', files: both, newFrom: 3 });
+  assert.deepStrictEqual([c.audit, c.unaudited], [late, 3], 'the audit has not read the cards from #3');
+  c = await made({ file: 'deck.json', files: both, newFrom: 5 });
+  assert.equal(c.unaudited, 3, 'a second addition before the audit: the first unread card stays');
+  assert.equal(await added(), 0, 'the cards have it');
+  c = await made({ file: 'audit.md', files: both });
+  assert.deepStrictEqual([c.audit, c.unaudited], [{ covers: both, added: [] }, null], 'audited: nothing unread');
+  c = await made({ file: 'deck.json', files: both, newFrom: 3 });
+  c = await made({ file: 'deck.json', files: both });
+  assert.equal(c.unaudited, null, 'cards written whole: the next audit reads them all');
+
+  // The page's own write of a file the person brought is new too; a dotfile is not material.
+  await s.request(4, 'course/write', { path: deck.path, name: '.ape-before.json', text: '{}' });
+  assert.deepStrictEqual((await coverage()).materials, both);
+  await s.request(5, 'course/write', { path: deck.path, name: 'notes.txt', text: 'late notes' });
+  assert.deepStrictEqual((await coverage()).inventory, { covers: both, added: ['notes.txt'] });
+
+  expectParamError(await s.request(6, 'course/made', { path: deck.path, file: 'notes.md', files: [] }), 'file', 'not a step file');
+  expectParamError(await s.request(7, 'course/made', { path: deck.path, file: 'plan.md', files: 'lecture.pdf' }), 'files', 'not a list');
+  expectParamError(await s.request(8, 'course/made', { path: deck.path, file: 'deck.json', files: both, newFrom: 0 }), 'newFrom', 'not a card number');
+  renameSync(join(deck.path, 'plan.md'), join(deck.path, 'plan.old'));
+  expectParamError(await s.request(9, 'course/made', { path: deck.path, file: 'plan.md', files: both }), 'file', 'not in the folder');
+  const cls = (await s.request(90, 'classes/create', { root, folder: 'Chem' })).result as { path: string };
+  expectParamError(await s.request(91, 'course/made', { path: cls.path, file: 'inventory.md', files: [] }), 'path', 'a class');
+  assert.equal(((await s.request(92, 'course/list', { path: cls.path })).result as { coverage: unknown }).coverage, null, 'a class\'s papers are its brief\'s');
+  assert.equal(await s.end(), 0);
+});

@@ -11,15 +11,22 @@
 // What is done is read from the course folder (course/list's artifacts, the
 // flags, verdicts.md), so a run picks up where it was left; what was merely
 // looked at this session (a review, the preview) is remembered here.
+//
+// Files added to a deck after its steps ran are new to them (course/list's
+// coverage): each step runs again on just those, adding to its file rather
+// than starting over (additionStage), the audit reads only the new cards,
+// and Send to Anki adds them beside the ones already there.
 
 import {
   WRITING_STAGES,
+  additionStage,
   makeRunner,
   type AuditFinding,
+  type AuditScope,
   type Runner,
   type StageId,
 } from '../../../dist/pipeline/index.js';
-import { EngineError, type ConnectResult, type Flag, type SidecarClient, type SendToAnkiResult } from '../engine/client.js';
+import { EngineError, type ConnectResult, type Coverage, type Flag, type SidecarClient, type SendToAnkiResult } from '../engine/client.js';
 import type { Bus } from './bus.js';
 import { mergeFlags } from './flags.js';
 import { STAGES, stepsNote, type Directive, type StepState } from './steps-note.js';
@@ -65,6 +72,8 @@ export interface StageHost {
   hasMaterials(): boolean;
   /** Opens the shell's way of adding files (a picker). */
   addFiles(): void;
+  /** What the deck's files are in changed -- a step was written from files added later, or put back: the tiles' marks follow. */
+  coverageChanged?(): void;
 }
 
 /** What each stage that can be discarded writes beside the material, besides whatever else the agent leaves. */
@@ -90,6 +99,40 @@ const FILE: Partial<Record<StageId, string>> = { extract: 'inventory.md', organi
 
 /** The stage behind an artifact a gate shows. */
 const WRITER: Record<string, StageId> = { 'inventory.md': 'extract', 'plan.md': 'organize', 'deck.json': 'cards' };
+
+/** A step's file, as the record of what each was written from names it. */
+type MadeFile = 'inventory.md' | 'plan.md' | 'deck.json' | 'audit.md';
+/** Each step that writes a file, and which part of the coverage is its. */
+const COVERS: Partial<Record<StageId, { file: MadeFile; key: 'inventory' | 'plan' | 'deck' | 'audit' }>> = {
+  extract: { file: 'inventory.md', key: 'inventory' },
+  organize: { file: 'plan.md', key: 'plan' },
+  cards: { file: 'deck.json', key: 'deck' },
+  audit: { file: 'audit.md', key: 'audit' },
+};
+
+/**
+ * What a step's file was before material was added to it, kept beside the
+ * deck so that Discard puts it back -- the cards in it may be in Anki -- rather
+ * than trashing the whole file. A dotfile: never material, never listed.
+ */
+const BEFORE = '.ape-before.json';
+type Before = Partial<Record<MadeFile, { text: string; from: string[]; unaudited: number | null }>>;
+
+/** "a.pdf", "a.pdf and b.txt", "3 files". */
+function names(files: string[]): string {
+  return files.length === 1 ? files[0]! : files.length === 2 ? `${files[0]} and ${files[1]}` : `${files.length} files`;
+}
+
+/** How many notes a deck.json holds, however it is shaped (a list, {notes}, {params: {notes}}). */
+export function noteCount(text: string): number {
+  try {
+    const d = JSON.parse(text) as unknown;
+    const o = (typeof d === 'object' && d !== null && 'params' in d ? (d as { params: unknown }).params : d) as { notes?: unknown } | unknown[];
+    return Array.isArray(o) ? o.length : Array.isArray((o as { notes?: unknown })?.notes) ? ((o as { notes: unknown[] }).notes.length) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -148,6 +191,12 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
   let previewed = false;
   let exportedTo: string | null = null;
   let sentToAnki: string | null = null; // what landed in Anki, once it has
+  /** What each step's file was written from, as the last listing said; null for a class, or before a deck is read. */
+  let cov: Coverage | null = null;
+  /** The cards the last addition wrote, by where they start: what the preview, the audit and the send are about. */
+  let lastAdded: { from: number; count: number } | null = null;
+  /** The deck the session state above is about: another deck opened starts it over. */
+  let stateDir: string | null = null;
   /** The artifact the gate is showing, if any. */
   let showing: string | null = null;
   /** A run-through is in progress: each stage starts the next until the audit. */
@@ -162,8 +211,8 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
   let lastRun: { dir: string; stage: StageId; before: Set<string> } | null = null;
   /** The stage whose artifact the gate shows, so Re-read can redraw it whole. */
   let gateStage: StageId | null = null;
-  /** What the discard gate on screen listed, moved to the trash on a yes. */
-  let pendingDiscard: { dir: string; stage: StageId; names: string[] } | null = null;
+  /** What the discard gate on screen listed, moved to the trash on a yes -- and the step's file put back as it was, when the run added to it. */
+  let pendingDiscard: { dir: string; stage: StageId; names: string[]; restore: MadeFile | null } | null = null;
 
   // Each step is a button, and says so: the first person through this screen
   // read the list as a progress display and asked how to start the process.
@@ -223,24 +272,57 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     if (said && said.textContent !== state) said.textContent = state;
   }
 
+  /** Whether a step's file is in the folder. */
+  function exists(stage: StageId): boolean {
+    return stage === 'extract' ? has.inventory : stage === 'organize' ? has.plan : stage === 'cards' ? has.deck : stage === 'audit' ? has.audit : false;
+  }
+
+  /** Files added since a step's file was written, which it has not been given; empty when it has no file yet. */
+  function addedTo(stage: StageId): string[] {
+    const c = COVERS[stage];
+    return (c && cov?.[c.key]?.added) || [];
+  }
+
+  /**
+   * Which steps are behind the material: a step is, when files were added
+   * since its file was written, or since any step before it was -- what it
+   * adds has to come down through every step after it.
+   */
+  function behind(): { extract: boolean; organize: boolean; cards: boolean; audit: boolean } {
+    const extract = addedTo('extract').length > 0;
+    const organize = extract || addedTo('organize').length > 0;
+    const cards = organize || addedTo('cards').length > 0;
+    return { extract, organize, cards, audit: cards || addedTo('audit').length > 0 };
+  }
+
+  /** What a step is given, as the record of what its file is written from: the materials, then each file's own cover in turn. */
+  function givenTo(stage: StageId): string[] {
+    const m = cov?.materials ?? [];
+    const inv = cov?.inventory?.covers ?? m;
+    const plan = cov?.plan?.covers ?? inv;
+    return stage === 'extract' ? m : stage === 'organize' ? inv : stage === 'cards' ? plan : (cov?.deck?.covers ?? plan);
+  }
+
   // A later artifact implies the earlier steps: a folder with only deck.json
-  // in it resumes at the preview, not at extract.
+  // in it resumes at the preview, not at extract. A step behind the material
+  // is not done, nor is anything after it, until what was added comes through.
   function done(stage: StageId): boolean {
+    const b = behind();
     switch (stage) {
       case 'extract':
-        return has.inventory || has.plan || has.deck;
+        return (has.inventory || has.plan || has.deck) && !b.extract;
       case 'inventory review':
-        return reviewed.has(stage) || has.plan || has.deck;
+        return !b.extract && (reviewed.has(stage) || ((has.plan || has.deck) && !b.organize));
       case 'organize':
-        return has.plan || has.deck;
+        return (has.plan || has.deck) && !b.organize;
       case 'plan review':
-        return reviewed.has(stage) || has.deck;
+        return !b.organize && (reviewed.has(stage) || (has.deck && !b.cards));
       case 'cards':
-        return has.deck;
+        return has.deck && !b.cards;
       case 'deck preview':
-        return has.deck && (previewed || has.audit);
+        return has.deck && !b.cards && (previewed || (has.audit && !b.audit));
       case 'audit':
-        return has.audit && !(has.flags > 0);
+        return has.audit && !b.audit && !(has.flags > 0);
       case 'deliver':
         return exportedTo !== null;
     }
@@ -248,12 +330,18 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
 
   /** What the bar offers: the first step not done, with the audit's sub-steps spelled out. */
   function action(): Action {
-    const writing = (stage: StageId): Action => ({
-      stage,
-      button: `Run ${stage}`,
-      hint: ABOUT[stage],
-      go: () => run(stage),
-    });
+    const writing = (stage: StageId): Action => {
+      const added = exists(stage) ? addedTo(stage) : [];
+      if (!added.length) return { stage, button: `Run ${stage}`, hint: ABOUT[stage], go: () => run(stage) };
+      const them = added.length === 1 ? 'it' : 'them';
+      const hint =
+        stage === 'extract'
+          ? `${names(added)} ${added.length === 1 ? 'was' : 'were'} added after the deck was made. The agent adds what ${added.length === 1 ? 'it teaches' : 'they teach'} to inventory.md; what is there stays as it is.`
+          : stage === 'organize'
+            ? `The agent plans cards for what ${names(added)} added to the inventory, at the end of plan.md. The cards already planned stay as they are.`
+            : `The agent writes the new cards from the plan and adds ${them} to the end of deck.json. The cards already written stay word for word, so the ones in Anki are not doubled.`;
+      return { stage, button: `Run ${stage} on ${added.length === 1 ? 'the new file' : `${added.length} new files`}`, hint, go: () => run(stage) };
+    };
     // A review is read before it is approved: the first press opens the
     // artifact in the gate, the second is the approval and runs what follows.
     const review = (stage: StageId): Action => {
@@ -270,18 +358,29 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
         },
       };
     };
-    if (!has.deck) {
-      if (!has.plan) {
+    const b = behind();
+    if (!has.deck || b.cards) {
+      if (!has.plan || b.organize) {
         if (!has.inventory && !host.hasMaterials()) return { stage: 'extract', button: 'Add files…', hint: 'Add the lecture\'s files first: slides as PDF, the transcript, the objectives.', go: async () => host.addFiles() };
-        if (!has.inventory) return writing('extract');
+        if (!has.inventory || b.extract) return writing('extract');
         if (!reviewed.has('inventory review')) return review('inventory review');
         return writing('organize');
       }
       if (!reviewed.has('plan review')) return review('plan review');
       return writing('cards');
     }
-    if (!has.audit && !previewed) return { stage: 'deck preview', button: 'Open the deck', hint: ABOUT['deck preview'], go: () => run('deck preview') };
-    if (!has.audit) return { stage: 'audit', button: 'Run audit', hint: ABOUT.audit, go: () => run('audit') };
+    // An audit from before cards were added has not read them: the deck is previewed and audited again, for those.
+    const audited = has.audit && !b.audit;
+    const fresh = lastAdded && b.audit ? lastAdded : null;
+    if (!audited && !previewed)
+      return { stage: 'deck preview', button: 'Open the deck', hint: fresh ? `Every card, rendered — the ${fresh.count} new ${fresh.count === 1 ? 'one is' : 'ones are'} from #${fresh.from}. Flag any that are wrong.` : ABOUT['deck preview'], go: () => run('deck preview') };
+    if (!audited)
+      return {
+        stage: 'audit',
+        button: 'Run audit',
+        hint: has.audit && cov?.unaudited ? `A fresh session reads the cards added since the last audit, from #${cov.unaudited}. Its findings and your flags go to an adjudicator; the writer applies the verdicts as written.` : ABOUT.audit,
+        go: () => run('audit'),
+      };
     if (has.flags > 0 && !has.verdicts)
       return {
         stage: 'audit',
@@ -315,7 +414,8 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
         go: () => run('deliver'),
         secondary: toAnki,
       };
-    return { stage: 'deliver', button: 'Send to Anki', hint: `${ABOUT.deliver} Anki must be open with the AnkiConnect add-on; Export writes an .apkg to import by hand instead.`, go: send, secondary: { label: 'Export .apkg', go: () => run('deliver') } };
+    const adds = lastAdded ? ` Send to Anki adds the ${lastAdded.count} new card${lastAdded.count === 1 ? '' : 's'}; the ones already there are skipped.` : '';
+    return { stage: 'deliver', button: 'Send to Anki', hint: `${ABOUT.deliver} Anki must be open with the AnkiConnect add-on; Export writes an .apkg to import by hand instead.${adds}`, go: send, secondary: { label: 'Export .apkg', go: () => run('deliver') } };
   }
 
   function renderBar(): void {
@@ -341,6 +441,8 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     }
     const a = action();
     const n = STAGES.indexOf(a.stage) + 1;
+    // Material added to a made deck: the kicker says so until it is through to the audit.
+    const adding = behind().audit ? (cov?.materials ?? []).filter((f) => !(cov?.audit ?? cov?.deck ?? cov?.plan ?? cov?.inventory)?.covers.includes(f)).length : 0;
     const needsAgent = !runner && (WRITING_STAGES.some((w) => w.id === a.stage) || a.stage === 'audit');
     rail.querySelectorAll<HTMLLIElement>('li').forEach((li) => li.classList.toggle('next', li.dataset.stage === a.stage));
     // Run to audit: offered wherever a stage is still ahead of the audit and an agent can run it.
@@ -348,7 +450,7 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     // The number belongs to the kicker, with how many there are -- "step 4 of
     // 8" says where a run is; "4 ·" in front of the name only crowds it.
     bar.innerHTML = `<div class="nb-text"><span class="nb-k">${
-      exportedTo !== null && a.stage === 'deliver' ? 'Done' : `Next · step ${n} of ${STAGES.length}`
+      exportedTo !== null && a.stage === 'deliver' ? 'Done' : adding ? `Adding ${adding} file${adding === 1 ? '' : 's'} · step ${n} of ${STAGES.length}` : `Next · step ${n} of ${STAGES.length}`
     }</span><strong>${esc(a.stage)}</strong><span class="nb-hint">${esc(a.hint)}</span></div>
       <div class="nb-actions">${
         canThrough ? `<button type="button" data-through="1" class="quiet" title="Extract, organize, cards and audit in a row, with no stops; come back to the findings.">Run to audit</button>` : ''
@@ -385,14 +487,25 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
       renderBar();
       return;
     }
+    // What was looked at, exported or sent belongs to the deck it happened in.
+    if (dir !== stateDir) {
+      stateDir = dir;
+      reviewed.clear();
+      previewed = false;
+      exportedTo = sentToAnki = null;
+      lastAdded = null;
+      force.clear();
+    }
     try {
-      const { artifacts } = await sidecar.listCourse(dir);
+      const { artifacts, coverage } = await sidecar.listCourse(dir);
+      cov = coverage ?? null;
       const audit = artifacts.deck ? await sidecar.readCourse(dir, 'audit.md').then(() => true, () => false) : false;
       const verdicts = artifacts.deck ? await sidecar.readCourse(dir, 'verdicts.md').then(() => true, () => false) : false;
       const flags = artifacts.deck ? await sidecar.readFlags(`${dir}/deck.json`).then((r) => r.flags.length, () => 0) : 0;
       has = { inventory: artifacts.inventory, plan: artifacts.plan, deck: artifacts.deck, audit, verdicts, flags };
     } catch {
       has = { inventory: false, plan: false, deck: false, audit: false, verdicts: false, flags: 0 };
+      cov = null;
     }
     rail.querySelectorAll<HTMLLIElement>('li').forEach((li) => li.classList.toggle('done', done(li.dataset.stage as StageId)));
     renderBar();
@@ -437,6 +550,58 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
       <pre class="artifact">${text === null ? `(${esc(missing)} — run it again, or ask the agent below)` : esc(text)}</pre>`, artifact);
   }
 
+  async function readBefore(dir: string): Promise<Before> {
+    try {
+      const b = JSON.parse((await sidecar.readCourse(dir, BEFORE)).text) as unknown;
+      return typeof b === 'object' && b !== null && !Array.isArray(b) ? (b as Before) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Keeps `file` as it is before an addition runs on it -- or, for a run written whole (`text` null), drops what was kept. */
+  async function keepBefore(dir: string, file: MadeFile, text: string | null): Promise<void> {
+    const kept = await readBefore(dir);
+    if (text === null && !kept[file]) return;
+    const key = COVERS[WRITER[file] ?? 'audit']!.key;
+    if (text === null) delete kept[file];
+    else kept[file] = { text, from: cov?.[key]?.covers ?? givenTo(WRITER[file] ?? 'audit'), unaudited: cov?.unaudited ?? null };
+    await sidecar.writeCourse(dir, BEFORE, { text: JSON.stringify(kept) }).catch(() => undefined);
+  }
+
+  /**
+   * The step finished and its file is there: the record that it was written
+   * from `given`. Cards added to a made deck say where they start, so the
+   * audit reads only those; an addition that carded nothing has nothing new
+   * for the audit either.
+   */
+  async function recordMade(dir: string, stage: StageId, given: string[], before: string | null, after: string): Promise<void> {
+    const file = COVERS[stage]?.file;
+    if (!file) return;
+    let newFrom: number | null | undefined;
+    if (stage === 'cards') {
+      if (before === null) {
+        newFrom = null;
+        lastAdded = null;
+      } else {
+        const n0 = noteCount(before);
+        const n1 = noteCount(after);
+        lastAdded = n1 > n0 ? { from: n0 + 1, count: n1 - n0 } : null;
+        newFrom = lastAdded ? lastAdded.from : (cov?.unaudited ?? null);
+        // New cards are new to Anki and to the .apkg: what was sent or exported was the deck without them.
+        exportedTo = sentToAnki = null;
+        previewed = false;
+      }
+    }
+    try {
+      cov = (await sidecar.madeFrom(dir, file, given, newFrom)).coverage;
+      if (stage === 'cards' && before !== null && !lastAdded && has.audit && cov.audit) cov = (await sidecar.madeFrom(dir, 'audit.md', given)).coverage;
+    } catch (err) {
+      host.say(err instanceof EngineError ? err.message : String(err), true);
+    }
+    host.coverageChanged?.();
+  }
+
   async function run(stage: StageId): Promise<void> {
     const dir = host.courseDir();
     if (!dir) return host.say('choose a course folder first', true);
@@ -473,16 +638,27 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
         hideGate();
         claim(stage);
         await snapshot();
+        // What the step is given, as of now -- a file added while it runs is not in it.
+        cov = await sidecar.listCourse(dir).then((r) => r.coverage ?? null, () => cov);
+        const given = givenTo(stage);
+        const file = COVERS[stage]!.file;
+        const adding = exists(stage) ? addedTo(stage) : [];
+        const before = adding.length ? await sidecar.readCourse(dir, file).then((r) => r.text, () => null) : null;
+        await keepBefore(dir, file, before);
+        // What it adds is read before the next step, as the first time was.
+        if (adding.length && stage === 'extract') reviewed.delete('inventory review');
+        if (adding.length && stage === 'organize') reviewed.delete('plan review');
         if (stage === 'extract') await host.prepareMaterials(dir);
         if (stopRequested) {
           halted = true;
           host.say(`${stage} stopped before the agent started`);
           return;
         }
-        host.say(`running ${stage}…`);
-        const r = await runner!.run(writing);
+        host.say(adding.length ? `running ${stage} on ${names(adding)}…` : `running ${stage}…`);
+        const r = await runner!.run(adding.length && before !== null ? additionStage(writing, adding) : writing);
         halted = r.stopReason !== 'end_turn';
-        host.say(!halted ? `${stage} finished` : `${stage} stopped: ${r.stopReason}`, halted);
+        if (!halted && r.artifactText !== null) await recordMade(dir, stage, given, adding.length ? before : null, r.artifactText);
+        host.say(!halted ? (stage === 'cards' && before !== null ? (lastAdded ? `cards finished — ${lastAdded.count} new, from #${lastAdded.from}` : 'cards finished — the added files gave no new cards') : `${stage} finished`) : `${stage} stopped: ${r.stopReason}`, halted);
         if (!discardAfter) showArtifactGate(stage, writing.artifact, r.artifactText);
       } else if (stage === 'inventory review' || stage === 'plan review') {
         const artifact = stage === 'inventory review' ? 'inventory.md' : 'plan.md';
@@ -497,7 +673,10 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
         // rather than paying for the audit again. "Re-run" is there for when
         // the deck has changed since.
         const existing = await sidecar.readCourse(dir, 'audit.md').then((r) => r.text, () => null);
-        if (existing !== null && !force.has('audit')) {
+        cov = await sidecar.listCourse(dir).then((r) => r.coverage ?? null, () => cov);
+        // Cards added since the audit was written: it is behind, and this one reads those.
+        const stale = behind().audit;
+        if (existing !== null && !force.has('audit') && !stale) {
           const { flags } = await sidecar.readFlags(`${dir}/deck.json`);
           showGate(`<header class="bar"><span>audit.md (already written) · ${flags.length} flag(s) to adjudicate</span><span class="grow"></span>
             ${flags.length ? '<button type="button" data-adjudicate="1">Adjudicate</button>' : ''}<button type="button" data-rerun="audit" class="quiet">Re-run audit</button><button type="button" data-close="1" class="quiet">Close</button></header>
@@ -506,6 +685,10 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
           return;
         }
         force.delete('audit');
+        const given = givenTo('audit');
+        const scope: AuditScope | undefined = existing !== null && stale && cov?.unaudited ? { from: cov.unaudited, files: addedTo('audit') } : undefined;
+        // Read only for the added cards, the last audit is kept for Discard to put back.
+        await keepBefore(dir, 'audit.md', scope ? existing : null);
         // What the last audit wrote is about a deck that has changed since; an
         // auditor that writes nothing this time must not have it read back as
         // this run's findings.
@@ -517,16 +700,17 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
         hideGate();
         claim(stage);
         await snapshot();
-        host.say('auditing the whole deck in a fresh session…');
+        host.say(scope ? `auditing the cards added since the last audit, from #${scope.from}, in a fresh session…` : 'auditing the whole deck in a fresh session…');
         const deckPath = `${dir}/deck.json`;
         // The auditor is told review.html is beside deck.json -- the run-sheet's
         // step 2, every front rendered as the student will see it. The app keeps
         // its own preview in memory, so the file is written here, just before.
         await sidecar.review(deckPath, { outPath: `${dir}/review.html` }).catch(() => undefined);
-        const a = await runner!.audit();
+        const a = await runner!.audit(scope);
         halted = a.stopReason !== 'end_turn';
         // A cancelled audit's findings are not merged into the owner's flags.
         if (discardAfter) return;
+        if (!halted && a.report !== null) await sidecar.madeFrom(dir, 'audit.md', given).then((r) => (cov = r.coverage), () => undefined);
         const { flags } = await sidecar.readFlags(deckPath);
         const merged: Flag[] = mergeFlags([
           ...flags,
@@ -567,18 +751,27 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     const outputs = OUTPUT[stage];
     if (!dir || !outputs) return;
     if (busy) return host.say(`${busy} is still running — stop it first`);
-    const own = (await Promise.all(outputs.map((name) => sidecar.readCourse(dir, name).then(() => name, () => null)))).filter((n): n is string => n !== null);
+    // A run that added to a file the step had already written: the file goes back to how it was, not to the trash.
+    const file = COVERS[stage]?.file ?? null;
+    const restore = file && (await readBefore(dir))[file] ? file : null;
+    const own = (await Promise.all(outputs.map((name) => sidecar.readCourse(dir, name).then(() => name, () => null)))).filter((n): n is string => n !== null && n !== restore);
     const run = lastRun && lastRun.dir === dir && lastRun.stage === stage ? lastRun : null;
     const added = run ? await sidecar.listCourse(dir).then((r) => r.files.map((f) => f.relPath).filter((f) => !run.before.has(f)), () => []) : [];
     const names = [...own, ...added];
-    if (names.length === 0) {
+    if (names.length === 0 && !restore) {
       hideGate();
       return host.say(`${stage} left nothing behind`);
     }
     const note = run ? 'Everything that was in the folder before the run stays.' : "Only the step's own file is listed: what else a run added is known only for the latest run, until the app closes.";
-    showGate(`<header class="bar"><span>Discard ${esc(stage)}?</span><span class="grow"></span><button type="button" data-discard-yes="1">Move ${names.length} to the trash</button><button type="button" data-close="1" class="quiet">Keep</button></header>
-      <pre class="artifact">${esc(`These go to the deck's trash, kept there 30 days:\n\n${names.map((n) => `  ${n}`).join('\n')}\n\n${note}`)}</pre>`);
-    pendingDiscard = { dir, stage, names };
+    const button = restore ? (names.length ? `Put back ${restore} and move ${names.length} to the trash` : `Put back ${restore}`) : `Move ${names.length} to the trash`;
+    const text = [
+      restore ? `${restore} goes back to how it was before the files added later were run through it. Nothing else changes.` : '',
+      names.length ? `These go to the deck's trash, kept there 30 days:\n\n${names.map((n) => `  ${n}`).join('\n')}` : '',
+      names.length || !restore ? note : '',
+    ].filter(Boolean).join('\n\n');
+    showGate(`<header class="bar"><span>Discard ${esc(stage)}?</span><span class="grow"></span><button type="button" data-discard-yes="1">${esc(button)}</button><button type="button" data-close="1" class="quiet">Keep</button></header>
+      <pre class="artifact">${esc(text)}</pre>`);
+    pendingDiscard = { dir, stage, names, restore };
   }
 
   async function discard(): Promise<void> {
@@ -587,13 +780,34 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     if (!d || d.dir !== host.courseDir()) return hideGate();
     if (busy) return host.say(`${busy} is still running — stop it first`);
     const failed: string[] = [];
+    if (d.restore) {
+      const kept = await readBefore(d.dir);
+      const was = kept[d.restore];
+      try {
+        if (!was) throw new Error(`what ${d.restore} was before is gone`);
+        await sidecar.writeCourse(d.dir, d.restore, { text: was.text });
+        // Its record goes back with it: what it covered, and where the unaudited cards started.
+        cov = (await sidecar.madeFrom(d.dir, d.restore, was.from, d.restore === 'deck.json' ? was.unaudited : undefined)).coverage;
+        // The audit put back did not read the added cards: they are unaudited again, from where they were.
+        if (d.restore === 'audit.md' && was.unaudited && cov.deck) cov = (await sidecar.madeFrom(d.dir, 'deck.json', cov.deck.covers, was.unaudited)).coverage;
+        delete kept[d.restore];
+        await sidecar.writeCourse(d.dir, BEFORE, { text: JSON.stringify(kept) });
+        if (d.restore === 'deck.json') lastAdded = null;
+      } catch (err) {
+        failed.push(`${d.restore} (${err instanceof Error ? err.message : String(err)})`);
+      }
+      host.coverageChanged?.();
+    }
     for (const name of d.names) await sidecar.deleteCourse(d.dir, name, { trash: true }).catch(() => failed.push(name));
     if (lastRun?.dir === d.dir && lastRun.stage === d.stage) lastRun = null;
     const review = next(d.stage);
     if (review === 'inventory review' || review === 'plan review') reviewed.delete(review);
     if (d.stage === 'cards') previewed = false;
     hideGate();
-    host.say(failed.length ? `could not move ${failed.join(', ')} to the trash` : `${d.stage} discarded — ${d.names.length} moved to the deck's trash`, failed.length > 0);
+    host.say(
+      failed.length ? `could not put back or move ${failed.join(', ')}` : `${d.stage} discarded — ${[d.restore ? `${d.restore} put back` : '', d.names.length ? `${d.names.length} moved to the deck's trash` : ''].filter(Boolean).join(', ')}`,
+      failed.length > 0,
+    );
     await refresh();
   }
 
@@ -617,10 +831,11 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
 
   /** The next stage a run-through would start, or null when it is the person's turn: the audit is written, or there is nothing to extract from. */
   function nextAuto(): StageId | null {
-    if (!has.inventory) return host.hasMaterials() ? 'extract' : null;
-    if (!has.plan) return 'organize';
-    if (!has.deck) return 'cards';
-    if (!has.audit) return 'audit';
+    const b = behind();
+    if (!has.inventory || b.extract) return host.hasMaterials() ? 'extract' : null;
+    if (!has.plan || b.organize) return 'organize';
+    if (!has.deck || b.cards) return 'cards';
+    if (!has.audit || b.audit) return 'audit';
     return null;
   }
 
@@ -734,7 +949,9 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
       const state: StepState = stage === runningStage ? 'running' : done(stage) ? 'done' : stage === nextStage ? 'next' : 'not yet';
       return { stage, state, about: FINISH[stage] };
     });
-    return stepsNote(steps, host.deckName());
+    // Files no step after them has been given yet: what the steps are bringing through.
+    const pending = behind().audit ? (cov?.materials ?? []).filter((f) => !(cov?.audit ?? cov?.deck ?? cov?.plan ?? cov?.inventory)?.covers.includes(f)) : [];
+    return stepsNote(steps, host.deckName(), pending);
   }
 
   /**
@@ -749,7 +966,11 @@ export function mountStages(rail: HTMLOListElement, bar: HTMLElement, gate: HTML
     const { stage } = d;
     if (d.verb === 'done') {
       const file = FILE[stage];
-      if (file) return done(stage) ? `✓ ${stage} is done — ${file} is in the folder` : `${stage} is not done: there is no ${file} in the folder yet`;
+      if (file) {
+        if (done(stage)) return `✓ ${stage} is done — ${file} is in the folder`;
+        const missing = exists(stage) ? addedTo(stage) : [];
+        return missing.length ? `${stage} is not done: ${file} does not have ${names(missing)} in it yet — run ${stage} on the new files` : `${stage} is not done: there is no ${file} in the folder yet`;
+      }
       if (stage === 'inventory review' || stage === 'plan review') {
         const needs = stage === 'inventory review' ? 'extract' : 'organize';
         if (!done(needs)) return `${stage} cannot be checked off: ${needs} has not written ${FILE[needs]} yet`;

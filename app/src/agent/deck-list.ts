@@ -40,6 +40,7 @@ export function matches(deck: DeckSummary, query: string): boolean {
 /** Where a deck is, in one phrase. */
 export function deckStatus(d: DeckSummary): string {
   const a = d.artifacts;
+  if (d.added && (a.inventory || a.plan || a.deck)) return `${d.added} file${d.added === 1 ? '' : 's'} added — not in the cards yet`;
   if (a.deck) return 'cards written — preview, audit, export';
   if (a.plan) return 'plan written — next: cards';
   if (a.inventory) return 'inventory written — next: organize';

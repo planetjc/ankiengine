@@ -4,13 +4,20 @@
 // now, in what order they show, and what is coming up across its classes.
 // No imports but types, so the tests run them as they are.
 
-import type { ClassSummary, Exam, Semester } from '../engine/client.js';
+import type { ClassSummary, Deadline, Exam, Semester } from '../engine/client.js';
 
 /** An exam as the agent wrote it into exams.json: no id yet, and nothing checked. */
 export interface FoundExam {
   name: string;
   date: string | null;
   covers?: string;
+}
+
+/** A deadline as the agent wrote it into exams.json, beside the exams. */
+export interface FoundDeadline {
+  name: string;
+  date: string | null;
+  what?: string;
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -126,6 +133,33 @@ export function upcomingExams(classes: ClassSummary[], today: Date = new Date(),
     .slice(0, limit);
 }
 
+/** One date still ahead in a class: an exam it is sat, or a deadline it is due. */
+export interface Upcoming {
+  kind: 'exam' | 'due';
+  name: string;
+  date: string;
+  cls: ClassSummary;
+}
+
+/** Every exam and deadline still ahead across some classes, soonest first; on one day, the exam first. */
+export function upcoming(classes: ClassSummary[], today: Date = new Date(), limit = Infinity): Upcoming[] {
+  const now = ymd(today);
+  const ahead = (d: string | null): d is string => d !== null && d >= now;
+  return classes
+    .flatMap((cls) => [
+      ...cls.exams.filter((e) => ahead(e.date)).map((e): Upcoming => ({ kind: 'exam', name: e.name, date: e.date!, cls })),
+      ...(cls.deadlines ?? []).filter((d) => ahead(d.date)).map((d): Upcoming => ({ kind: 'due', name: d.name, date: d.date!, cls })),
+    ])
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === 'exam' ? -1 : 1) || a.cls.folder.localeCompare(b.cls.folder))
+    .slice(0, limit);
+}
+
+/** Within the week: what the School view marks as soon. */
+export function soon(date: string, today: Date = new Date()): boolean {
+  const n = daysUntil(date, today);
+  return n >= 0 && n <= 7;
+}
+
 /** Today on this machine's calendar, YYYY-MM-DD. */
 export function ymd(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -158,6 +192,18 @@ export function nextExam(exams: Exam[], today: Date = new Date()): Exam | null {
   return exams.filter((e) => e.date !== null && e.date >= now).sort((a, b) => a.date!.localeCompare(b.date!))[0] ?? null;
 }
 
+/** The next deadline on the calendar, today's included; null when none is ahead. */
+export function nextDeadline(deadlines: Deadline[], today: Date = new Date()): Deadline | null {
+  const now = ymd(today);
+  return deadlines.filter((d) => d.date !== null && d.date >= now).sort((a, b) => a.date!.localeCompare(b.date!))[0] ?? null;
+}
+
+/** "due in 3 days", "due today", "was due 2 days ago". */
+export function dueWhen(date: string, today: Date = new Date()): string {
+  const n = daysUntil(date, today);
+  return n < 0 ? `was due ${countdown(date, today)}` : `due ${countdown(date, today)}`;
+}
+
 /** What fits before an exam at the person's rate: the number the organize step is told. */
 export function roomBefore(exam: Exam, newPerDay: number, today: Date = new Date()): number | null {
   if (!exam.date) return null;
@@ -165,35 +211,50 @@ export function roomBefore(exam: Exam, newPerDay: number, today: Date = new Date
   return n < 0 ? null : n * newPerDay;
 }
 
-/** exams.json as the agent wrote it, keeping only what is an exam: a name, and a real date or none. */
-export function parseFoundExams(text: string): FoundExam[] {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return [];
-  }
-  const list = Array.isArray(raw) ? raw : typeof raw === 'object' && raw !== null && Array.isArray((raw as { exams?: unknown }).exams) ? (raw as { exams: unknown[] }).exams : [];
-  const out: FoundExam[] = [];
+/** One list from exams.json: a name, a real date or none, and what the row says about itself under `detail`. */
+function rowsOf(list: unknown, detail: 'covers' | 'what'): { name: string; date: string | null; covers?: string; what?: string }[] {
+  if (!Array.isArray(list)) return [];
+  const out: { name: string; date: string | null; covers?: string; what?: string }[] = [];
   for (const x of list) {
     if (typeof x !== 'object' || x === null) continue;
     const e = x as Record<string, unknown>;
     const name = typeof e.name === 'string' ? e.name.replace(/\s+/g, ' ').trim() : '';
     if (!name) continue;
     const date = typeof e.date === 'string' && DATE.test(e.date) && !Number.isNaN(Date.parse(`${e.date}T00:00:00Z`)) ? e.date : null;
-    const covers = typeof e.covers === 'string' && e.covers.trim() ? e.covers.trim() : undefined;
-    out.push({ name, date, ...(covers ? { covers } : {}) });
+    const said = typeof e[detail] === 'string' && (e[detail] as string).trim() ? (e[detail] as string).trim() : undefined;
+    out.push({ name, date, ...(said ? { [detail]: said } : {}) });
   }
   return out;
 }
 
+/** exams.json as the agent wrote it: its exams, and what is due besides them. An older brief's plain array is all exams. */
+export function parseFoundDates(text: string): { exams: FoundExam[]; deadlines: FoundDeadline[] } {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return { exams: [], deadlines: [] };
+  }
+  if (Array.isArray(raw)) return { exams: rowsOf(raw, 'covers'), deadlines: [] };
+  if (typeof raw !== 'object' || raw === null) return { exams: [], deadlines: [] };
+  const o = raw as Record<string, unknown>;
+  return { exams: rowsOf(o.exams, 'covers'), deadlines: rowsOf(o.deadlines, 'what') };
+}
+
+/** exams.json's exams alone. */
+export function parseFoundExams(text: string): FoundExam[] {
+  return parseFoundDates(text).exams;
+}
+
 const key = (name: string) => name.toLowerCase().replace(/\s+/g, ' ').trim();
 
-export interface ExamMerge {
-  exams: (Omit<Exam, 'id'> & { id?: string })[];
-  /** New exams the papers named. */
+type Row = { id?: string; name: string; date: string | null; covers?: string; what?: string; setBy?: 'person' };
+
+export interface DatedMerge<T> {
+  rows: T[];
+  /** New rows the papers named. */
   added: number;
-  /** Exams that gained a date or a coverage they did not have. */
+  /** Rows that gained a date, or a line about themselves, they did not have. */
   filled: number;
   /** Dates the papers moved: a newer paper -- a revised schedule -- over an older one's. */
   moved: { name: string; from: string; to: string }[];
@@ -202,19 +263,20 @@ export interface ExamMerge {
 }
 
 /**
- * The exams the class keeps, with what the agent found in the papers joined
- * in: a new name is added; a date or coverage is filled in or, when a newer
+ * The rows a class keeps, with what the agent found in the papers joined
+ * in: a new name is added; a date or `detail` is filled in or, when a newer
  * paper moves it, moved. What the person set by hand is never overwritten --
  * a date they corrected stays theirs, and where the papers disagree, that is
  * said rather than done.
  */
-export function mergeExams(kept: Exam[], found: FoundExam[]): ExamMerge {
-  const exams: (Omit<Exam, 'id'> & { id?: string })[] = kept.map((e) => ({ ...e }));
-  const out: ExamMerge = { exams, added: 0, filled: 0, moved: [], differ: [] };
+function mergeDated<T extends Row>(kept: T[], found: Omit<Row, 'id' | 'setBy'>[], detail: 'covers' | 'what'): DatedMerge<Omit<T, 'id'> & { id?: string }> {
+  const rows: (Omit<T, 'id'> & { id?: string })[] = kept.map((e) => ({ ...e }));
+  const out: DatedMerge<Omit<T, 'id'> & { id?: string }> = { rows, added: 0, filled: 0, moved: [], differ: [] };
   for (const f of found) {
-    const same = exams.find((e) => key(e.name) === key(f.name));
+    const same = rows.find((e) => key(e.name) === key(f.name)) as Row | undefined;
+    const said = f[detail];
     if (!same) {
-      exams.push({ name: f.name, date: f.date, ...(f.covers ? { covers: f.covers } : {}) });
+      rows.push({ name: f.name, date: f.date, ...(said ? { [detail]: said } : {}) } as Omit<T, 'id'>);
       out.added += 1;
       continue;
     }
@@ -230,11 +292,26 @@ export function mergeExams(kept: Exam[], found: FoundExam[]): ExamMerge {
         same.date = f.date;
       }
     }
-    if (f.covers && same.covers !== f.covers && (!same.covers || !theirs)) {
-      if (!same.covers) filled = true;
-      same.covers = f.covers;
+    if (said && same[detail] !== said && (!same[detail] || !theirs)) {
+      if (!same[detail]) filled = true;
+      same[detail] = said;
     }
     if (filled) out.filled += 1;
   }
   return out;
+}
+
+export interface ExamMerge extends Omit<DatedMerge<Omit<Exam, 'id'> & { id?: string }>, 'rows'> {
+  exams: (Omit<Exam, 'id'> & { id?: string })[];
+}
+
+/** The class's exams with the ones the papers name joined in (mergeDated). */
+export function mergeExams(kept: Exam[], found: FoundExam[]): ExamMerge {
+  const { rows, ...rest } = mergeDated(kept, found, 'covers');
+  return { exams: rows, ...rest };
+}
+
+/** The class's deadlines with the ones the papers name joined in, as the exams are. */
+export function mergeDeadlines(kept: Deadline[], found: FoundDeadline[]): DatedMerge<Omit<Deadline, 'id'> & { id?: string }> {
+  return mergeDated(kept, found, 'what');
 }

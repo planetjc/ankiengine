@@ -38,3 +38,9 @@ test('a step the app does not have, or a mention mid-sentence, moves nothing', (
   assert.deepEqual(directives('I could write "APE: done extract" if you want.'), [], 'only a line of its own');
   assert.deepEqual(directives('ape:  DONE   Inventory  Review'), [{ verb: 'done', stage: 'inventory review' }], 'spacing and case are forgiven');
 });
+
+test('files added after the steps ran are named, and the steps said to add to their files', () => {
+  const n = stepsNote(steps(null, 0), 'Bio::L1', ['study guide.pdf', 'notes.txt']);
+  assert.match(n, /Files added to this deck after its steps ran: study guide\.pdf, notes\.txt\. The steps run again on those alone/);
+  assert.doesNotMatch(stepsNote(steps(null, 0), 'Bio::L1'), /Files added/);
+});

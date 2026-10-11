@@ -550,3 +550,40 @@ server is involved: the sidecar is a program and POSTs to localhost. The same
 day's other fix: the exporter, the check and the review all read that media
 list, which the writer had been producing and nothing had been reading, so
 the first desktop export went out with every image missing.
+
+**Deadlines, and material added to a made deck (2026-10-11).** Two things
+the app was being described as doing and did not.
+
+*Deadlines.* A class keeps `deadlines` beside its `exams` in
+`.ape-class.json`: an assignment, a problem set, a lab report, a paper --
+graded and due rather than sat. The class brief's exams.json is now
+`{"exams": [...], "deadlines": [...]}` (a plain array still reads as all
+exams), merged by the same rules as the exams (`mergeDated` in
+class-rules.ts: the papers fill gaps and move their own dates, never the
+person's). `classes/update` takes either list or both; ids run `d1, d2…`
+apart from the exams' `e1…`. They show under Exams on the class screen,
+on the class card ("Lab report 2 · due in 2 days"), and in Coming up beside
+the exams, with this week's rows marked. No deck is ever sized to one; the
+deck's exam is still the next *exam*. The method's step 0 has a
+`## Deadlines` section (method repo, 0-class.md).
+
+*Material added to a made deck.* `.ape-deck.json` keeps `from`: for each
+step file -- inventory.md, plan.md, deck.json, audit.md -- the materials it
+was written from (`course/made`, sent by the app when a step finishes).
+course/list's `coverage` sets each file against what the step before it
+covers, so a file added after the cards exist is new to extract, then to
+organize, then to cards, then to the audit, in turn. A deck from before
+this record has none; `course/import` and a top-level `course/write` settle
+it first (each file covers what is there now), so what is added next is
+new. On such a deck each writing step runs as `additionStage`: told the
+new files, and to add to its file under `## Added: …` -- deck.json's notes
+appended, none already there changed, since Anki knows a note by its text.
+Cards added to an audited deck record where they start (`unaudited`), and
+the audit reads those alone (`AuditScope`). Before an addition the step's
+file is kept in `.ape-before.json`, so Discard puts it back rather than
+trashing a file whose cards may be in Anki. Send to Anki then adds the new
+cards and skips the rest, as it always did.
+
+The stage state that was not on disk -- reviews read, the preview opened,
+what was exported or sent -- was kept for the window, not the deck: sending
+one deck showed "Done" on the next. It is now reset when another deck opens.

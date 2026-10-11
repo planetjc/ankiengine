@@ -3,8 +3,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { ClassSummary, Exam, Semester } from '../src/engine/client.ts';
-import { canBeClass, countdown, daysUntil, defaultSemester, mergeExams, nextExam, nextTerm, orderSemesters, parseFoundExams, roomBefore, semesterOf, shortDate, suggestTerm, termFromName, termRange, termState, upcomingExams } from '../src/agent/class-rules.ts';
+import type { ClassSummary, Deadline, Exam, Semester } from '../src/engine/client.ts';
+import { canBeClass, countdown, daysUntil, defaultSemester, dueWhen, mergeDeadlines, mergeExams, nextDeadline, nextExam, nextTerm, orderSemesters, parseFoundDates, parseFoundExams, roomBefore, semesterOf, shortDate, soon, suggestTerm, termFromName, termRange, termState, upcoming, upcomingExams } from '../src/agent/class-rules.ts';
 
 const TODAY = new Date(2026, 8, 27, 23, 30); // Sep 27, late in the evening: still the 27th
 const cls = (folder: string): ClassSummary => ({ folder, path: `/c/${folder}`, exams: [], brief: 'none', files: 0 });
@@ -138,4 +138,53 @@ test('a new semester is suggested as the next term not made yet', () => {
   assert.deepEqual(nextTerm([FALL, NEXT], TODAY), { name: 'Summer 2027', start: '2027-06-01', end: '2027-08-07' });
   assert.equal(nextTerm([SPRING], TODAY).name, 'Fall 2026', 'an old one made: today\'s is still free');
   assert.equal(nextTerm([term('Year 1::fall 2026', '2026-08-24', null)], TODAY).name, 'Spring 2027', 'names inside a folder, any case');
+});
+
+const due = (id: string, name: string, date: string | null, what?: string, setBy?: 'person'): Deadline => ({ id, name, date, ...(what ? { what } : {}), ...(setBy ? { setBy } : {}) });
+
+test('exams.json carries the deadlines beside the exams; an older brief\'s plain array is all exams', () => {
+  const both = parseFoundDates(JSON.stringify({ exams: [{ name: 'Midterm', date: '2026-10-14' }], deadlines: [{ name: ' Lab  report ', date: '2026-10-02', what: ' bone, 10% ' }, { name: 'Paper', date: 'soon' }, { date: '2026-10-03' }] }));
+  assert.deepEqual(both.exams, [{ name: 'Midterm', date: '2026-10-14' }]);
+  assert.deepEqual(both.deadlines, [{ name: 'Lab report', date: '2026-10-02', what: 'bone, 10%' }, { name: 'Paper', date: null }], 'a name required, a date only if it is one');
+  assert.deepEqual(parseFoundDates('[{"name": "Final", "date": null}]'), { exams: [{ name: 'Final', date: null }], deadlines: [] });
+  assert.deepEqual(parseFoundDates('not json'), { exams: [], deadlines: [] });
+  assert.deepEqual(parseFoundExams(JSON.stringify({ exams: [{ name: 'Quiz' }], deadlines: [{ name: 'PS 1' }] })), [{ name: 'Quiz', date: null }], 'the exams alone');
+});
+
+test('deadlines from the papers join the class\'s as exams do: the person\'s dates stand, a newer paper moves the papers\'', () => {
+  const kept = [due('d1', 'Lab report 1', '2026-10-02', undefined, 'person'), due('d2', 'Problem set 3', '2026-10-09')];
+  const m = mergeDeadlines(kept, [
+    { name: 'lab report 1', date: '2026-10-05' },
+    { name: 'Problem set 3', date: '2026-10-12', what: 'Ch. 4' },
+    { name: 'Term paper', date: null, what: 'Draft, 15%' },
+  ]);
+  assert.deepEqual(m.rows, [
+    { id: 'd1', name: 'Lab report 1', date: '2026-10-02', setBy: 'person' },
+    { id: 'd2', name: 'Problem set 3', date: '2026-10-12', what: 'Ch. 4' },
+    { name: 'Term paper', date: null, what: 'Draft, 15%' },
+  ]);
+  assert.equal(m.added, 1);
+  assert.equal(m.filled, 1, 'the problem set gained what it is');
+  assert.deepEqual(m.moved, [{ name: 'Problem set 3', from: '2026-10-09', to: '2026-10-12' }]);
+  assert.deepEqual(m.differ, [{ name: 'Lab report 1', papers: '2026-10-05', yours: '2026-10-02' }]);
+});
+
+test('coming up puts exams and deadlines on one calendar, the exam first on a shared day; the week is soon', () => {
+  const histo = { ...cls('Histology'), exams: [exam('e1', 'Midterm 1', '2026-10-14'), exam('e2', 'Quiz', '2026-09-01')], deadlines: [due('d1', 'Lab report', '2026-09-30'), due('d2', 'Paper', null)] };
+  const bio = { ...cls('Biochem'), exams: [], deadlines: [due('d1', 'Problem set', '2026-10-14')] };
+  assert.deepEqual(upcoming([histo, bio], TODAY).map((u) => [u.kind, u.name, u.date, u.cls.folder]), [
+    ['due', 'Lab report', '2026-09-30', 'Histology'],
+    ['exam', 'Midterm 1', '2026-10-14', 'Histology'],
+    ['due', 'Problem set', '2026-10-14', 'Biochem'],
+  ]);
+  assert.equal(upcoming([histo, bio], TODAY, 1).length, 1);
+  assert.deepEqual(upcoming([cls('Plain')], TODAY), [], 'a class from before deadlines were kept');
+  assert.equal(soon('2026-10-04', TODAY), true, 'seven days off');
+  assert.equal(soon('2026-10-05', TODAY), false);
+  assert.equal(soon('2026-09-26', TODAY), false, 'past');
+  assert.equal(nextDeadline(histo.deadlines, TODAY)?.name, 'Lab report');
+  assert.equal(nextDeadline([due('d1', 'Old', '2026-09-01')], TODAY), null);
+  assert.equal(dueWhen('2026-09-30', TODAY), 'due in 3 days');
+  assert.equal(dueWhen('2026-09-27', TODAY), 'due today');
+  assert.equal(dueWhen('2026-09-25', TODAY), 'was due 2 days ago');
 });

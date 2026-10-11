@@ -71,6 +71,10 @@ export interface WritingStage {
   time?: boolean; // told the exam date and the student's rate: the step that sizes the deck to them
 }
 
+/** How deck.json names its slide images: the app packs, checks and renders them from this list. */
+const MEDIA =
+  'Slide images: reference each one in Extra by the name the method gives it, and list every such name once in a top-level "media" array in deck.json as {"filename": "<that name>", "path": "<absolute path of the page image under _extracted/>"} -- this app packs, checks and renders the images from that list; there is no collection.media here to stage into, and no file is copied or renamed.';
+
 export const WRITING_STAGES: WritingStage[] = [
   { id: 'extract', method: '1-extract.md', artifact: 'inventory.md', ask: 'Run this step on the course folder below and write inventory.md beside the material.', companions: ['SETUP.md'] },
   { id: 'organize', method: '2-organize.md', artifact: 'plan.md', ask: 'Run this step on the course folder below: inventory.md is already there; write plan.md beside it.', time: true },
@@ -78,9 +82,13 @@ export const WRITING_STAGES: WritingStage[] = [
     id: 'cards',
     method: '3-cards.md',
     artifact: 'deck.json',
-    ask: 'Run this step on the course folder below: plan.md and inventory.md are already there. Write deck.json beside them and stop there -- this app runs the structural checks and renders the review itself, and nothing is inserted into Anki from here. Slide images: reference each one in Extra by the name the method gives it, and list every such name once in a top-level "media" array in deck.json as {"filename": "<that name>", "path": "<absolute path of the page image under _extracted/>"} -- this app packs, checks and renders the images from that list; there is no collection.media here to stage into, and no file is copied or renamed.',
+    ask: `Run this step on the course folder below: plan.md and inventory.md are already there. Write deck.json beside them and stop there -- this app runs the structural checks and renders the review itself, and nothing is inserted into Anki from here. ${MEDIA}`,
   },
 ];
+
+/** exams.json, as the app reads it: the exams, and what is due besides them. */
+const DATES =
+  'a JSON object {"exams": [...], "deadlines": [...]}. "exams" has one object per exam the papers name -- quizzes and practicals included -- {"name": "<as they name it>", "date": "YYYY-MM-DD" or null when no date is given, "covers": "<what it covers, in their words>"}. "deadlines" has one object per graded thing the papers say is due rather than sat -- an assignment, a problem set, a lab report, a paper, a presentation -- {"name": "<as they name it>", "date": "YYYY-MM-DD" or null, "what": "<what else they say of it -- its topic, its weight -- not its name again; left out when they say nothing more>"}, and is empty when they name none.';
 
 /**
  * A class's one step, run in the class's own folder: the syllabus and the
@@ -92,7 +100,7 @@ export const CLASS_STAGE: WritingStage = {
   id: 'class brief',
   method: '0-class.md',
   artifact: 'class.md',
-  ask: 'Run this step on the class folder below and write class.md beside its files. Also write exams.json beside it: a JSON array with one object per exam the papers name, {"name": "<as they name it>", "date": "YYYY-MM-DD" or null when no date is given, "covers": "<what it covers, in their words>"}. This app shows the person those exams to confirm and keeps the dates; no cards are written here.',
+  ask: `Run this step on the class folder below and write class.md beside its files. Also write exams.json beside it: ${DATES} This app shows the person those exams and deadlines to confirm and keeps the dates; no cards are written here.`,
 };
 
 /**
@@ -104,8 +112,34 @@ export function classUpdateStage(newPapers: string[]): WritingStage {
   const list = newPapers.map((f) => `- ${f}`).join('\n');
   return {
     ...CLASS_STAGE,
-    ask: `class.md is already written beside the class's papers, from the ones it names, and the person has read it. These papers were added since:\n${list}\nRead each of them end to end and fold what they add into class.md, in its sections, each new line with its source -- as your method's "A paper added later" says. Keep every line that is there unless a new paper changes it, and say so where it does. Then write exams.json again, with every exam class.md now names, as before: a JSON array of {"name", "date": "YYYY-MM-DD" or null, "covers"}. No cards are written here.`,
+    ask: `class.md is already written beside the class's papers, from the ones it names, and the person has read it. These papers were added since:\n${list}\nRead each of them end to end and fold what they add into class.md, in its sections, each new line with its source -- as your method's "A paper added later" says. Keep every line that is there unless a new paper changes it, and say so where it does. Then write exams.json again, with every exam and deadline class.md now names: ${DATES} No cards are written here.`,
   };
+}
+
+/**
+ * A writing step again, for material added to a deck after the step's file
+ * was written: told which files are new, and to add to the file rather than
+ * start over -- the person has read what is there, and the cards may be in
+ * Anki already, which knows a note by its text.
+ */
+export function additionStage(stage: WritingStage, added: string[]): WritingStage {
+  const list = added.map((f) => `- ${f}`).join('\n');
+  const heading = `"## Added: ${added.join(', ')}"`;
+  const asks: Partial<Record<WritingStage['id'], string>> = {
+    extract: `inventory.md is already written beside the material, from the files it names, and the person has read it. These files were added to the deck since:\n${list}\nRead each of them end to end, as your method says, and add what they teach to the end of inventory.md under one new heading, ${heading}, in the same form as the rest, each fact with where it came from. Leave every line already there as it is. A fact the inventory already has is not listed again; one that differs from a line already there is listed under the new heading with both sources, and the old line stays.`,
+    organize: `plan.md is already written from inventory.md, and the person has read it; its cards may already be written and in Anki. inventory.md now ends with facts from files added since:\n${list}\nPlan cards for those facts only, at the end of plan.md under one new heading, ${heading}, in the same form as the rest. Leave every card already planned as it is: a fact the plan already covers is not planned again, and a new fact that overlaps a planned card is noted under the new heading, not merged into the old card.`,
+    cards: `deck.json is already written from plan.md, and its notes may already be in Anki, which knows a note by its text. plan.md now ends with cards planned for files added since:\n${list}\nWrite those cards, to the method, and add them to the end of the notes array in deck.json, in the plan's order, with the same deck name, note type, tags and conventions as the notes already there. Do not change, reorder or remove any note already in deck.json: one reworded would reach Anki as a second card and leave the first behind. Stop there -- this app runs the structural checks and renders the review itself. ${MEDIA} New images go after the ones already listed.`,
+  };
+  const ask = asks[stage.id];
+  if (!ask) throw new Error(`${stage.id} has no addition`);
+  return { ...stage, ask };
+}
+
+/** An audit of only the cards added since the last one: where they start, and the files they came from. */
+export interface AuditScope {
+  /** The first added card, counted from 1 in deck.json order. */
+  from: number;
+  files: string[];
 }
 
 /** What the app knows that the folder does not: the student's own rate, and what day it is. */
@@ -223,13 +257,17 @@ export interface AuditFinding {
 }
 
 /** The auditor's prompt: the deck-auditor brief as the system block, the step-3 method for its reference cards, the deck. A fresh session that wrote none of the cards. */
-export async function auditBlocks(client: PipelineClient, courseDir: string): Promise<ContentBlock[]> {
+export async function auditBlocks(client: PipelineClient, courseDir: string, scope?: AuditScope): Promise<ContentBlock[]> {
   const [brief, method, deck] = await Promise.all([client.readMethod('4-audit.md'), client.readMethod('3-cards.md'), client.readCourse(courseDir, 'deck.json')]);
+  // Material added to an audited deck: its new cards are what is unread.
+  const only = scope
+    ? ` Cards #${scope.from} onward were added since this deck was last audited, from files added to it later (${scope.files.join(', ')}); the cards before them were audited then. Audit the added cards on all four angles -- coverage meaning coverage of the added files -- and read the earlier ones only to catch an added card that repeats or contradicts one of them.`
+    : '';
   return [
     { type: 'resource', resource: { uri: 'ape://system', text: brief.text, mimeType: 'text/markdown' } },
     {
       type: 'text',
-      text: `Audit the deck in the course folder below. The seven reference cards your brief tells you to read first are at the top of the attached step-3 method; review.html is already rendered beside deck.json, so do not run render_review.py. Cards are numbered from 1 in deck.json array order. Write your findings to audit.md beside the deck -- all four angles of your brief -- and ALSO write audit.json beside it: a JSON array of objects { "card": <number>, "angle": "truth"|"fluency"|"coverage"|"style", "finding": "<one or two sentences>" }, one per finding that names a specific card (a coverage finding with no card uses "card": 0). Edit nothing else.\n\nCourse folder: ${courseDir}`,
+      text: `Audit the deck in the course folder below.${only} The seven reference cards your brief tells you to read first are at the top of the attached step-3 method; review.html is already rendered beside deck.json, so do not run render_review.py. Cards are numbered from 1 in deck.json array order. Write your findings to audit.md beside the deck -- all four angles of your brief -- and ALSO write audit.json beside it: a JSON array of objects { "card": <number>, "angle": "truth"|"fluency"|"coverage"|"style", "finding": "<one or two sentences>" }, one per finding that names a specific card (a coverage finding with no card uses "card": 0). Edit nothing else.\n\nCourse folder: ${courseDir}`,
     },
     { type: 'resource', resource: { uri: 'ape://method/3-cards.md', text: method.text, mimeType: 'text/markdown' } },
     { type: 'resource', resource: { uri: fileUri(courseDir, 'deck.json'), text: deck.text, mimeType: 'application/json' } },
@@ -263,8 +301,8 @@ export async function applyVerdictsBlocks(client: PipelineClient, courseDir: str
 
 export interface Runner {
   run(stage: WritingStage): Promise<{ stopReason: string; artifactText: string | null }>;
-  /** The whole-deck read the method's run-sheet calls step 3: a fresh session files findings; nothing is edited. */
-  audit(): Promise<{ stopReason: string; report: string | null; findings: AuditFinding[] }>;
+  /** The whole-deck read the method's run-sheet calls step 3: a fresh session files findings; nothing is edited. With a scope, only the cards added since the last audit. */
+  audit(scope?: AuditScope): Promise<{ stopReason: string; report: string | null; findings: AuditFinding[] }>;
   adjudicate(flags: Flag[]): Promise<{ stopReason: string; verdicts: string | null }>;
   applyVerdicts(): Promise<{ stopReason: string }>;
   /**
@@ -307,9 +345,9 @@ export function makeRunner(client: PipelineClient, conn: ConnectionLike, courseD
       }
       return { stopReason, artifactText };
     },
-    async audit() {
+    async audit(scope) {
       const fresh = await client.newSession(conn.connectionId);
-      const { stopReason } = await prompt(fresh.session.sessionId, await auditBlocks(client, courseDir));
+      const { stopReason } = await prompt(fresh.session.sessionId, await auditBlocks(client, courseDir, scope));
       const report = await client.readCourse(courseDir, 'audit.md').then((r) => r.text, () => null);
       let findings: AuditFinding[] = [];
       try {

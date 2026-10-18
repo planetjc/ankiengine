@@ -11,7 +11,7 @@ import { EngineError, makeSidecarClient, type Flag, type SidecarClient, type Sen
 import { TauriHost, secrets, sidecarStatus } from './engine/tauri-host.js';
 import { mountPreview } from './preview.js';
 import { applyTheme, readTheme } from './theme.js';
-import { offerUpdate } from './updater.js';
+import { startUpdates } from './updater.js';
 
 // Before anything is drawn, so a pinned theme does not flash the other one.
 // It cannot be an inline script in index.html: the window's CSP allows
@@ -231,7 +231,7 @@ function makeDeckView(sidecar: SidecarClient, say: (text: string, isError?: bool
 function fail(message: string): void {
   root.innerHTML = `<div class="dead"><h1>AnkiEngine</h1><p class="error">${esc(message)}</p></div>`;
   const dead = root.querySelector<HTMLElement>('.dead')!;
-  void offerUpdate(dead, (text) => dead.insertAdjacentHTML('beforeend', `<p class="error">${esc(text)}</p>`));
+  startUpdates(dead, (text) => dead.insertAdjacentHTML('beforeend', `<p class="error">${esc(text)}</p>`));
 }
 
 void (async () => {
@@ -245,12 +245,14 @@ void (async () => {
   const sidecar = makeSidecarClient(host);
   const status = { say: (text: string, isError = false): void => app.say(text, isError) };
   const deck = makeDeckView(sidecar, (t, e) => status.say(t, e));
+  const updates = startUpdates($('main'), (t, e) => status.say(t, e));
   const app = mountAgentApp(host, {
     rail: $('rail'),
     bar: $('bar'),
     view: $('view-agent'),
     deck,
     keys: secrets,
+    updates,
     pickFiles: async (title) => {
       const picked = await open({ multiple: true, directory: false, title });
       return Array.isArray(picked) ? picked : typeof picked === 'string' ? [picked] : null;
@@ -263,6 +265,4 @@ void (async () => {
     if (event.payload.type !== 'drop' || event.payload.paths.length === 0) return;
     void app.addPaths(event.payload.paths);
   });
-
-  void offerUpdate($('main'), app.say);
 })();

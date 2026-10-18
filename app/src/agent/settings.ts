@@ -4,12 +4,15 @@
 
 import type { EngineHost } from '../engine/client.js';
 import { readTheme, setTheme, type Theme } from '../theme.js';
+import { lookLine, type UpdateControl } from '../update-schedule.js';
 import { mountSignIn } from './signin.js';
 import { readNewPerDay, setNewPerDay } from './study.js';
 
 export interface SettingsOptions {
   onDone(): void;
   say(text: string, isError?: boolean): void;
+  /** Where the shell updates itself (the desktop app): the version, and a button to look now. */
+  updates?: UpdateControl;
 }
 
 export interface Settings {
@@ -53,10 +56,12 @@ export function mountSettings(host: HTMLElement, engine: EngineHost, opts: Setti
     <section class="set-section">
       <h3>This app</h3>
       <dl class="facts">
+        ${opts.updates ? '<dt>Version</dt><dd id="set-version">…</dd>' : ''}
         <dt>Engine</dt><dd>${esc(engine.info.engine)} ${esc(engine.info.version)} on Node ${esc(engine.info.node)}, over ${esc(engine.info.transport)}</dd>
         <dt>Agents are installed in</dt><dd class="path">${esc(engine.dataDir())}</dd>
         <dt>Method files</dt><dd class="path" id="set-method">…</dd>
       </dl>
+      ${opts.updates ? '<p class="set-update"><button type="button" id="set-update" class="quiet">Check for updates</button><span class="hint" id="set-update-said" aria-live="polite"></span></p>' : ''}
       <p class="hint">Nothing leaves this computer except what the agent sends to its own service. Artifacts live beside your material; the app keeps no copy.</p>
     </section>
     <section class="set-section">
@@ -66,6 +71,33 @@ export function mountSettings(host: HTMLElement, engine: EngineHost, opts: Setti
     </section>`;
   const $ = <T extends HTMLElement>(sel: string): T => host.querySelector<T>(sel)!;
   $<HTMLButtonElement>('#set-done').addEventListener('click', () => opts.onDone());
+
+  // Updates: the app looks on its own (updater.ts), so this says when it last
+  // did and what came back -- a failed look shows here rather than nowhere --
+  // and the button looks now.
+  const updates = opts.updates;
+  if (updates) {
+    const said = $<HTMLElement>('#set-update-said');
+    const button = $<HTMLButtonElement>('#set-update');
+    const time = (at: number): string => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const tell = (): void => {
+      if (!button.disabled) said.textContent = lookLine(updates.last(), time);
+    };
+    tell();
+    updates.onLook(tell);
+    updates.version().then(
+      (v) => ($<HTMLElement>('#set-version').textContent = `AnkiEngine ${v}`),
+      () => ($<HTMLElement>('#set-version').textContent = 'unknown'),
+    );
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      said.textContent = 'Checking…';
+      void updates.checkNow().finally(() => {
+        button.disabled = false;
+        tell();
+      });
+    });
+  }
 
   // Copied rather than linked: the window has no way to hand a mailto: link
   // to the mail app, and a link that does nothing is worse than none.

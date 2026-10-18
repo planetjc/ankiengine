@@ -27,6 +27,7 @@
 
 import { toBase64 } from '../engine/bytes.js';
 import { EngineError, makeSidecarClient, type ClassSummary, type ConnectResult, type CourseClass, type DeckSummary, type EngineHost, type Semester, type SidecarClient, type SendToAnkiResult } from '../engine/client.js';
+import type { UpdateControl } from '../update-schedule.js';
 import { makeBus } from './bus.js';
 import { mountChat, type Chat } from './chat.js';
 import { mountClassPane, type ClassPane } from './class-pane.js';
@@ -64,6 +65,8 @@ export interface AgentAppOptions {
   keys: KeyStore;
   /** A native file dialog returning paths, where the shell has one; without it, a file input whose bytes go through the sidecar. */
   pickFiles?: (title: string) => Promise<string[] | null>;
+  /** Where the shell updates itself (the desktop app): Settings gets a "Check for updates". */
+  updates?: UpdateControl;
 }
 
 export interface AgentApp {
@@ -858,6 +861,7 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
   const settings: Settings = mountSettings(settingsEl, host, {
     onDone: () => show(before === 'settings' ? 'home' : before),
     say,
+    updates: opts.updates,
   });
   void sidecar.listMethod().then(
     (m) => settings.setMethodDir(m.dir),

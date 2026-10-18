@@ -283,6 +283,8 @@
 .facts dt { color: var(--muted); } .facts dd { margin: 0; word-break: break-all; }
 .set-contact { display: flex; align-items: center; gap: 10px; margin: 8px 0 0; }
 .set-contact .path { user-select: text; font-variation-settings: var(--voice-mono); }
+.set-update { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 10px 0 0; }
+.set-update .hint { margin: 0; }
 
 /* Appearance: three choices, the mark on the one in force. */
 .set-theme { display: inline-flex; gap: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }

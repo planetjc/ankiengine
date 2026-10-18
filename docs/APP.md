@@ -154,8 +154,7 @@ variables at build time (`APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
 right for the re-signed node. Artifacts: a `.zip` of the app (`ditto -c -k --keepParent`) and a plain
 `.dmg` (`hdiutil create -format UDZO`); Tauri's own DMG step drives Finder
 through Apple events and cannot run headless. **Updates and releases.** `tauri-plugin-updater` checks
-`https://github.com/planetjc/ape-go-bananas/releases/latest/download/latest.json`
-on launch and offers a bar; the archive is verified against the minisign
+`https://ankiengine.com/latest.json` and offers a bar; the archive is verified against the minisign
 public key in `tauri.conf.json`, which is unrelated to Apple signing. The
 private key lives outside the repo (`~/.tauri/ape.key` on the build machine,
 `TAURI_SIGNING_PRIVATE_KEY` as a repository secret). Lose it and no shipped
@@ -628,3 +627,18 @@ To change it: edit the geometry at the top of render-icon.py, run it, then
 into shell.css and site/index.html. That CLI also writes `icons/android` and
 `icons/ios`, which a desktop app has no use for; delete them. A dev restart
 keeps the old Dock icon until `cargo clean -p ape-app`.
+
+**Updates look more than once (2026-10-18).** Up to v0.3.1 the app looked
+for an update once, at launch, and said nothing when that look failed: the
+owner's copy sat on 0.2.1 with 0.3.1 out, until a relaunch found it. The
+feed, the check and the signed download were all fine (run against the live
+feed with the same plugin version, from a test harness); the one look had
+simply missed. Now `update-schedule.ts` decides when to look: at launch;
+after a failed look, again in a minute and then in five; every six hours;
+and when the window comes back to the front if the last look is half an
+hour old. Later puts that version off for a day. A failed look stays off the
+screen, but Settings, under This app, shows the version, when the app last
+looked and what came back, and a Check for updates button that offers the
+bar even for a version put off. A failed install keeps the bar, with the
+reason and Try again. Only builds from v0.3.2 on behave this way: an older
+copy still looks once per launch.

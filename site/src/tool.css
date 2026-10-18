@@ -49,8 +49,8 @@ h1 { font-size: 32px; letter-spacing: -.01em; margin: 0 0 6px; font-weight: 750;
 /* The same mark the app puts in its rail. */
 h1::before {
   content: ''; flex: none; width: 34px; height: 34px; background: var(--banana);
-  -webkit-mask: var(--banana-mask) no-repeat center / contain;
-  mask: var(--banana-mask) no-repeat center / contain;
+  -webkit-mask: var(--mark-mask-full) no-repeat center / contain;
+  mask: var(--mark-mask-full) no-repeat center / contain;
 }
 h1 .sep { color: var(--line); }
 h1 .what { font-size: 20px; letter-spacing: normal; color: var(--muted); font-weight: 400; }

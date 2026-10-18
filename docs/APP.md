@@ -604,3 +604,27 @@ field -- and to leave out a card that would ask the same thing again
 (`anki/deckStats` and `anki/deckNotes`, read through `StageOptions.anki`;
 the words are src/pipeline/anki.ts). Anki closed changes nothing: the bar
 says what it always did, and the steps are told nothing of Anki.
+
+**The mark (2026-10-18).** The banana is gone. The mark is a flywheel made
+of cards: six cards round a hub, each lying on the one before so every joint
+shows a card edge, each written on (two lines from the top left) so the ring
+reads as cards rather than chain links. It was picked on the icon canvas
+after the engine's verbs were laid out: an engine and Anki share a verb,
+turning the same thing over again and again.
+
+One geometry feeds everything: `app/scripts/render-icon.py` writes
+`app/app-icon.png` and prints the mark as a single path, filled nonzero
+(cards clockwise, what is cut out of them anticlockwise), checking first that
+the path equals the drawing it stands for. There are two sizes. The full one,
+written on, is the icon, the rail's 26px (`--mark-mask-full` in shell.css),
+the tool page's heading and the site's header (`#bf`). The small one drops
+the writing and widens the cut between cards, for the 10-17px marks: the
+steps, the composer, the deck track (`--mark-mask`), the site's pillars and
+mocks (`#b`) and the favicon, which puts it on the yellow tile so it holds on
+light and dark tabs alike.
+
+To change it: edit the geometry at the top of render-icon.py, run it, then
+`npx tauri icon app-icon.png` from `app/`, and paste the two printed paths
+into shell.css and site/index.html. That CLI also writes `icons/android` and
+`icons/ios`, which a desktop app has no use for; delete them. A dev restart
+keeps the old Dock icon until `cargo clean -p ape-app`.

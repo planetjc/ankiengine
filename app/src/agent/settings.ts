@@ -100,7 +100,7 @@ export function mountSettings(host: HTMLElement, engine: EngineHost, opts: Setti
     } else rate.value = String(readNewPerDay());
   });
 
-  // Appearance. The pressed one is the one in force; the banana marks it.
+  // Appearance. The pressed one is the one in force; it carries the mark.
   const themeGroup = $<HTMLElement>('#set-theme');
   const showTheme = (theme: Theme): void => {
     themeGroup.querySelectorAll<HTMLButtonElement>('button[data-theme]').forEach((b) => {

@@ -3,11 +3,12 @@
    (../style.css) and the tool page over the bridge (site/src/tool.css); each
    supplies the palette variables and its own page layout.
 
-   The look is one family (Recursive) at four settings and one accent (a
-   banana) that always means "act, or you are here". The banana itself is a
-   mask, not an image or a glyph in the markup: every mark below is a
+   The look is one family (Recursive) at four settings and one accent (the
+   yellow, named --banana for the app's first mark) that always means "act, or
+   you are here". The mark -- six cards round a hub, a flywheel made of cards --
+   is a mask, not an image or a glyph in the markup: every mark below is a
    pseudo-element filled with currentColor, so a step's state colours its own
-   banana and nothing in the DOM has to know about it. */
+   mark and nothing in the DOM has to know about it. */
 
 :root {
   /* Tokens this stylesheet needs, each defaulting to the older one it
@@ -31,12 +32,15 @@
   --voice-display: normal;
   --voice-button: normal;
 
-  /* The mark. It has to read at 14px in the rail, so the crescent is fat and
-     the stem is a stub rather than a stalk. */
-  --banana-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4.4 2.2C3.6 12.6 11.4 20.4 21.6 20.4c1 0 1.3-1.2.4-1.7-.9-.5-1.5-1.1-1.9-1.9C14.2 15.7 9.4 11.1 8.4 5.2 8.2 4.1 7.6 3.1 6.7 2.4 5.9 1.8 4.5 1.3 4.4 2.2Z'/%3E%3C/svg%3E");
+  /* The mark, as app/scripts/render-icon.py draws it (it prints both paths).
+     The small one is for the marks at 13-17px: the writing on the cards would
+     only be noise there, so it goes, and the cut between cards widens so the
+     joints still show. The full one, written on, is for the rail's 26px. */
+  --mark-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8.8 2.2L15.2 2.2A0.35 0.35 0 0 1 15.55 2.55L15.55 5.65A0.35 0.35 0 0 1 15.2 6L8.8 6A0.35 0.35 0 0 1 8.45 5.65L8.45 2.55A0.35 0.35 0 0 1 8.8 2.2ZM15.23 6L15.33 5.97L15.42 5.92L15.49 5.84L15.54 5.72L15.55 4.35L14.94 4.71L14.69 4.93L14.59 5.05L14.42 5.32L14.36 5.47L14.27 5.78L14.25 6ZM18.89 4.33L22.09 9.87A0.35 0.35 0 0 1 21.96 10.35L19.27 11.9A0.35 0.35 0 0 1 18.8 11.77L15.6 6.23A0.35 0.35 0 0 1 15.72 5.75L18.41 4.2A0.35 0.35 0 0 1 18.89 4.33ZM18.81 11.8L18.89 11.87L18.98 11.92L19.08 11.95L19.21 11.93L20.4 11.25L19.78 10.9L19.47 10.8L19.31 10.77L18.99 10.76L18.83 10.78L18.52 10.86L18.32 10.95ZM22.09 14.13L18.89 19.67A0.35 0.35 0 0 1 18.41 19.8L15.72 18.25A0.35 0.35 0 0 1 15.6 17.77L18.8 12.23A0.35 0.35 0 0 1 19.27 12.1L21.96 13.65A0.35 0.35 0 0 1 22.09 14.13ZM15.58 17.8L15.55 17.9L15.55 18L15.59 18.1L15.67 18.21L16.85 18.9L16.84 18.19L16.78 17.87L16.72 17.72L16.57 17.43L16.48 17.3L16.25 17.07L16.07 16.95ZM15.2 21.8L8.8 21.8A0.35 0.35 0 0 1 8.45 21.45L8.45 18.35A0.35 0.35 0 0 1 8.8 18L15.2 18A0.35 0.35 0 0 1 15.55 18.35L15.55 21.45A0.35 0.35 0 0 1 15.2 21.8ZM8.77 18L8.67 18.03L8.58 18.08L8.51 18.16L8.46 18.28L8.45 19.65L9.06 19.29L9.31 19.07L9.41 18.95L9.58 18.68L9.64 18.53L9.73 18.22L9.75 18ZM5.11 19.67L1.91 14.13A0.35 0.35 0 0 1 2.04 13.65L4.73 12.1A0.35 0.35 0 0 1 5.2 12.23L8.4 17.77A0.35 0.35 0 0 1 8.28 18.25L5.59 19.8A0.35 0.35 0 0 1 5.11 19.67ZM5.19 12.2L5.11 12.13L5.02 12.08L4.92 12.05L4.79 12.07L3.6 12.75L4.22 13.1L4.53 13.2L4.69 13.23L5.01 13.24L5.17 13.22L5.48 13.14L5.68 13.05ZM1.91 9.87L5.11 4.33A0.35 0.35 0 0 1 5.59 4.2L8.28 5.75A0.35 0.35 0 0 1 8.4 6.23L5.2 11.77A0.35 0.35 0 0 1 4.73 11.9L2.04 10.35A0.35 0.35 0 0 1 1.91 9.87ZM8.42 6.2L8.45 6.1L8.45 6L8.41 5.9L8.33 5.79L7.15 5.1L7.16 5.81L7.22 6.13L7.28 6.28L7.43 6.57L7.52 6.7L7.75 6.93L7.93 7.05ZM8.6 12A3.4 3.4 0 1 1 15.4 12A3.4 3.4 0 1 1 8.6 12ZM10.7 12A1.3 1.3 0 1 0 13.3 12A1.3 1.3 0 1 0 10.7 12Z'/%3E%3C/svg%3E");
+  --mark-mask-full: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8.8 1.95L15.2 1.95A0.6 0.6 0 0 1 15.8 2.55L15.8 5.65A0.6 0.6 0 0 1 15.2 6.25L8.8 6.25A0.6 0.6 0 0 1 8.2 5.65L8.2 2.55A0.6 0.6 0 0 1 8.8 1.95ZM15.26 6.25L15.43 6.2L15.58 6.11L15.7 5.98L15.77 5.82L15.8 5.65L15.8 4.49L15.2 4.84L14.98 5L14.71 5.31L14.55 5.69L14.5 5.96L14.51 6.25ZM9.62 3A0.42 0.42 0 0 0 9.2 3.43L9.2 3.43A0.42 0.42 0 0 0 9.62 3.85L13.14 3.85A0.42 0.42 0 0 0 13.57 3.43L13.57 3.43A0.42 0.42 0 0 0 13.14 3ZM9.62 4.4A0.42 0.42 0 0 0 9.2 4.83L9.2 4.83A0.42 0.42 0 0 0 9.62 5.25L11.55 5.25A0.42 0.42 0 0 0 11.97 4.83L11.97 4.83A0.42 0.42 0 0 0 11.55 4.4ZM19.1 4.2L22.3 9.75A0.6 0.6 0 0 1 22.08 10.57L19.4 12.12A0.6 0.6 0 0 1 18.58 11.9L15.38 6.35A0.6 0.6 0 0 1 15.6 5.53L18.28 3.98A0.6 0.6 0 0 1 19.1 4.2ZM18.61 11.95L18.73 12.07L18.89 12.16L19.06 12.19L19.24 12.18L19.4 12.12L20.4 11.54L19.8 11.19L19.55 11.08L19.15 11L18.74 11.05L18.48 11.15L18.24 11.3ZM18.61 5.44A0.42 0.42 0 0 0 18.03 5.29L18.03 5.29A0.42 0.42 0 0 0 17.87 5.87L19.63 8.91A0.42 0.42 0 0 0 20.21 9.07L20.21 9.07A0.42 0.42 0 0 0 20.37 8.49ZM17.39 6.14A0.42 0.42 0 0 0 16.81 5.99L16.81 5.99A0.42 0.42 0 0 0 16.66 6.57L17.62 8.23A0.42 0.42 0 0 0 18.2 8.39L18.2 8.39A0.42 0.42 0 0 0 18.36 7.81ZM22.3 14.25L19.1 19.8A0.6 0.6 0 0 1 18.28 20.02L15.6 18.47A0.6 0.6 0 0 1 15.38 17.65L18.58 12.1A0.6 0.6 0 0 1 19.4 11.88L22.08 13.43A0.6 0.6 0 0 1 22.3 14.25ZM15.35 17.7L15.3 17.87L15.31 18.04L15.36 18.21L15.46 18.36L15.6 18.47L16.6 19.04L16.6 18.35L16.57 18.08L16.43 17.69L16.19 17.36L15.98 17.19L15.72 17.05ZM20.98 14.44A0.42 0.42 0 0 0 20.83 13.86L20.83 13.86A0.42 0.42 0 0 0 20.25 14.02L18.49 17.06A0.42 0.42 0 0 0 18.64 17.65L18.64 17.65A0.42 0.42 0 0 0 19.22 17.49ZM19.77 13.74A0.42 0.42 0 0 0 19.61 13.16L19.61 13.16A0.42 0.42 0 0 0 19.03 13.32L18.07 14.98A0.42 0.42 0 0 0 18.23 15.56L18.23 15.56A0.42 0.42 0 0 0 18.81 15.41ZM15.2 22.05L8.8 22.05A0.6 0.6 0 0 1 8.2 21.45L8.2 18.35A0.6 0.6 0 0 1 8.8 17.75L15.2 17.75A0.6 0.6 0 0 1 15.8 18.35L15.8 21.45A0.6 0.6 0 0 1 15.2 22.05ZM8.74 17.75L8.57 17.8L8.42 17.89L8.3 18.02L8.23 18.18L8.2 18.35L8.2 19.51L8.8 19.16L9.02 19L9.29 18.69L9.45 18.31L9.5 18.04L9.49 17.75ZM14.38 21A0.42 0.42 0 0 0 14.8 20.57L14.8 20.57A0.42 0.42 0 0 0 14.38 20.15L10.86 20.15A0.42 0.42 0 0 0 10.43 20.57L10.43 20.57A0.42 0.42 0 0 0 10.86 21ZM14.38 19.6A0.42 0.42 0 0 0 14.8 19.18L14.8 19.18A0.42 0.42 0 0 0 14.38 18.75L12.45 18.75A0.42 0.42 0 0 0 12.03 19.18L12.03 19.18A0.42 0.42 0 0 0 12.45 19.6ZM4.9 19.8L1.7 14.25A0.6 0.6 0 0 1 1.92 13.43L4.6 11.88A0.6 0.6 0 0 1 5.42 12.1L8.62 17.65A0.6 0.6 0 0 1 8.4 18.47L5.72 20.02A0.6 0.6 0 0 1 4.9 19.8ZM5.39 12.05L5.27 11.93L5.11 11.84L4.94 11.81L4.76 11.82L4.6 11.88L3.6 12.46L4.2 12.81L4.45 12.92L4.85 13L5.26 12.95L5.52 12.85L5.76 12.7ZM5.39 18.56A0.42 0.42 0 0 0 5.97 18.71L5.97 18.71A0.42 0.42 0 0 0 6.13 18.13L4.37 15.09A0.42 0.42 0 0 0 3.79 14.93L3.79 14.93A0.42 0.42 0 0 0 3.63 15.51ZM6.61 17.86A0.42 0.42 0 0 0 7.19 18.01L7.19 18.01A0.42 0.42 0 0 0 7.34 17.43L6.38 15.77A0.42 0.42 0 0 0 5.8 15.61L5.8 15.61A0.42 0.42 0 0 0 5.64 16.19ZM1.7 9.75L4.9 4.2A0.6 0.6 0 0 1 5.72 3.98L8.4 5.53A0.6 0.6 0 0 1 8.62 6.35L5.42 11.9A0.6 0.6 0 0 1 4.6 12.12L1.92 10.57A0.6 0.6 0 0 1 1.7 9.75ZM8.65 6.3L8.7 6.13L8.69 5.96L8.64 5.79L8.54 5.64L8.4 5.53L7.4 4.96L7.4 5.65L7.43 5.92L7.57 6.31L7.81 6.64L8.02 6.81L8.28 6.95ZM3.02 9.56A0.42 0.42 0 0 0 3.17 10.14L3.17 10.14A0.42 0.42 0 0 0 3.75 9.98L5.51 6.94A0.42 0.42 0 0 0 5.36 6.35L5.36 6.35A0.42 0.42 0 0 0 4.78 6.51ZM4.23 10.26A0.42 0.42 0 0 0 4.39 10.84L4.39 10.84A0.42 0.42 0 0 0 4.97 10.68L5.93 9.02A0.42 0.42 0 0 0 5.77 8.44L5.77 8.44A0.42 0.42 0 0 0 5.19 8.59ZM8.6 12A3.4 3.4 0 1 1 15.4 12A3.4 3.4 0 1 1 8.6 12ZM10.7 12A1.3 1.3 0 1 0 13.3 12A1.3 1.3 0 1 0 10.7 12Z'/%3E%3C/svg%3E");
 }
 
-/* Every banana on screen. `em` sizes it to whatever it sits beside. */
+/* Every mark on screen. `em` sizes it to whatever it sits beside. */
 .rail h1::before, #rail h1::before,
 .stages li::before,
 .nextbar::before,
@@ -47,8 +51,8 @@
   content: ''; flex: none; align-self: center;
   display: inline-block; width: 1.05em; height: 1.05em;
   background: currentColor;
-  -webkit-mask: var(--banana-mask) no-repeat center / contain;
-  mask: var(--banana-mask) no-repeat center / contain;
+  -webkit-mask: var(--mark-mask) no-repeat center / contain;
+  mask: var(--mark-mask) no-repeat center / contain;
 }
 
 /* ---- the rail ------------------------------------------------------------- */
@@ -57,7 +61,10 @@
   font-size: 23px; margin: 0 0 4px; letter-spacing: -.005em; font-weight: 750;
   font-variation-settings: var(--voice-display); color: var(--wordmark);
 }
-.rail h1::before, #rail h1::before { color: var(--banana); font-size: 26px; }
+.rail h1::before, #rail h1::before {
+  color: var(--banana); font-size: 26px;
+  -webkit-mask-image: var(--mark-mask-full); mask-image: var(--mark-mask-full);
+}
 .railhead {
   margin: 16px 0 5px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
   color: var(--muted); display: block; font-weight: 500;
@@ -81,8 +88,8 @@
 }
 #rail-deck:focus-visible { outline: 2px solid var(--banana-edge); outline-offset: 1px; border-color: var(--banana-edge); }
 
-/* The eight steps, one banana each: dim until earned, green once done, the
-   live one in banana. Eight of them in a column is the bunch. */
+/* The eight steps, one mark each: dim until earned, green once done, the
+   live one in yellow. */
 .stages { list-style: none; margin: 6px 0; padding: 0; font-family: var(--font-mono); font-variation-settings: var(--voice-mono); }
 .stages li {
   display: flex; align-items: center; gap: 9px; padding: 5px 8px; color: var(--muted);
@@ -183,7 +190,7 @@
    a percentage: the ring says "still going", the clock says how long, and the
    second line appears only once the agent has gone quiet long enough to be
    worth mentioning. */
-/* While a stage runs the spinner takes the banana's place, rather than the
+/* While a stage runs the spinner takes the mark's place, rather than the
    bar carrying two marks. */
 .nextbar:has(.nb-spin)::before { display: none; }
 .nb-spin {
@@ -277,7 +284,7 @@
 .set-contact { display: flex; align-items: center; gap: 10px; margin: 8px 0 0; }
 .set-contact .path { user-select: text; font-variation-settings: var(--voice-mono); }
 
-/* Appearance: three choices, the banana marking the one in force. */
+/* Appearance: three choices, the mark on the one in force. */
 .set-theme { display: inline-flex; gap: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
 .set-theme > button {
   display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 8px 15px;
@@ -420,14 +427,14 @@
 .decks li.editing { cursor: default; }
 .decks li.editing:hover { background: var(--panel); }
 /* How far through the eight this deck is, from the artifacts on disk. The
-   banana rides at the head of the track. */
+   mark rides at the head of the track. */
 .dsteps { grid-column: 2; grid-row: 1 / -1; display: flex; align-items: center; gap: 9px; justify-self: end; }
 .dtrack { position: relative; width: 116px; height: 6px; background: var(--dim); border-radius: 3px; }
 .dtrack > i { position: absolute; inset: 0 auto 0 0; background: var(--good); border-radius: 3px; }
 .dsteps .dmark {
   flex: none; width: 17px; height: 17px; background: var(--dim);
-  -webkit-mask: var(--banana-mask) no-repeat center / contain;
-  mask: var(--banana-mask) no-repeat center / contain;
+  -webkit-mask: var(--mark-mask) no-repeat center / contain;
+  mask: var(--mark-mask) no-repeat center / contain;
 }
 .dsteps.started .dmark { background: var(--banana); }
 .dsteps.finished .dmark { background: var(--good); }

@@ -35,7 +35,7 @@ export function stepsNote(steps: Step[], deck: string, added: string[] = []): st
   const next = steps.find((s) => s.state === 'next');
   const lines = steps.map((s, i) => `  ${i + 1}. ${s.stage} — ${s.state}${s.state === 'done' || s.state === 'running' ? '' : ` (${s.about})`}`);
   return [
-    `[From the A.P.E. app, not typed by the person.] The person makes this deck${deck ? ` (${deck})` : ''} in eight steps, shown in the app's sidebar. The app starts each step itself and shows the person what a step wrote before the next one begins:`,
+    `[From the AnkiEngine app, not typed by the person.] The person makes this deck${deck ? ` (${deck})` : ''} in eight steps, shown in the app's sidebar. The app starts each step itself and shows the person what a step wrote before the next one begins:`,
     ...lines,
     ...(added.length
       ? [`Files added to this deck after its steps ran: ${added.join(', ')}. The steps run again on those alone, each adding to its file -- inventory.md, plan.md, deck.json -- and leaving what is there as it is; the cards already written may be in Anki.`]

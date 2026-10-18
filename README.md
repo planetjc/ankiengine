@@ -1,11 +1,13 @@
-# A.P.E.
+# AnkiEngine
 
 Deck-pipeline structural checks, a `.apkg` (Anki package) writer, a CLI over
 both, an ACP (Agent Client Protocol) client, and a stdio sidecar that exposes
 all of it to the desktop app in `app/` (`docs/APP.md`), in TypeScript. Every claim
 about what works here is backed by a command in [Status](#status) that was
-actually run. The letters stand for **Anki Process Engine**, which the method's own
-repository has been called all along and which the site now says out loud.
+actually run. It was called A.P.E. until v0.3, for **Anki Process Engine**, the name the
+method's own repository has had all along; it is AnkiEngine now, after the domain.
+The app's file names (`APE.app`, the `APE-*` downloads) keep the old letters, so
+installed copies go on updating.
 
 ## Use it
 
@@ -259,7 +261,7 @@ default-resolution fallback.
   than assume a default. An earlier version of this file said permission
   requests could not be treated as a safety boundary; that was true before
   `session/set_mode` existed and is no longer.
-- **Sign-in is the agent CLI's job, not A.P.E.'s.** The Claude adapter
+- **Sign-in is the agent CLI's job, not AnkiEngine's.** The Claude adapter
   returns `authMethods: []` and handles auth out-of-band, so ACP
   `authenticate` will not unblock Claude Code — log in with the `claude`
   CLI. Gemini CLI does advertise auth methods, which is where an

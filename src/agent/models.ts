@@ -33,7 +33,7 @@ export const DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1';
 /** The two attribution headers from openrouter-api.md §1, sent on every request. */
 export const ATTRIBUTION_HEADERS: Readonly<Record<string, string>> = {
   'HTTP-Referer': 'https://github.com/planetjc',
-  'X-OpenRouter-Title': 'A.P.E.',
+  'X-OpenRouter-Title': 'AnkiEngine',
 };
 
 export function authHeaders(apiKey: string, extra?: Record<string, string>): Record<string, string> {

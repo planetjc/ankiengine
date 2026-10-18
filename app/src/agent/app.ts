@@ -107,7 +107,7 @@ function basename(p: string): string {
 export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp {
   const { rail, bar, view, deck } = opts;
   rail.innerHTML = `
-    <h1>A.P.E.</h1>
+    <h1>AnkiEngine</h1>
     <div class="viewswitch" role="group" aria-label="How the library is shown"><button type="button" data-view="decks">Decks</button><button type="button" data-view="school">School</button></div>
     <label class="railhead" for="rail-deck">Deck</label>
     <input id="rail-deck" placeholder="Course::Lecture 3" autocomplete="off" list="rail-deck-anki" title="What the deck is called in Anki. Two colons make a subdeck.">

@@ -94,7 +94,7 @@ jobs:
         with:
           projectPath: APE/app
           tagName: v__VERSION__
-          releaseName: 'A.P.E. v__VERSION__'
+          releaseName: 'AnkiEngine v__VERSION__'
           releaseBody: |
             Download for your platform below. This is free software and the builds are
             not notarized with Apple, so on macOS the first launch is: double-click →

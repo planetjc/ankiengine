@@ -83,7 +83,7 @@ export async function extractPdf(name: string, data: Uint8Array, sink: ExtractSi
   const task = pdfjs.getDocument({ data });
   const doc = await deadline(`opening ${name}`, task.promise, LOAD_DEADLINE_MS);
   const pages = doc.numPages;
-  const parts: string[] = [`# ${name}\n\nExtracted by A.P.E.: ${pages} page${pages === 1 ? '' : 's'}. One image per page sits beside this file as ${pageStem(1)}.jpg … ${pageStem(pages)}.jpg.\n`];
+  const parts: string[] = [`# ${name}\n\nExtracted by AnkiEngine: ${pages} page${pages === 1 ? '' : 's'}. One image per page sits beside this file as ${pageStem(1)}.jpg … ${pageStem(pages)}.jpg.\n`];
   const canvas = document.createElement('canvas');
   try {
     for (let n = 1; n <= pages; n += 1) {

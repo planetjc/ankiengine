@@ -293,7 +293,7 @@ export function mountClassSteps(line: HTMLElement, gate: HTMLElement, host: Clas
     if (!cls) return '';
     const state = cls.brief === 'none' ? 'not written yet' : cls.brief === 'written' ? 'written, and not yet read by the person' : 'written and read by the person';
     return [
-      `[From the A.P.E. app, not typed by the person.] This is the class ${cls.folder}, not a deck. Its folder holds the class's own papers -- the syllabus, exam guides, the schedule -- and its one step is the class brief: reading those papers by the method's step 0 into class.md beside them, with exams.json for the exams and deadlines. Every deck in the class is given class.md at each of its steps.`,
+      `[From the AnkiEngine app, not typed by the person.] This is the class ${cls.folder}, not a deck. Its folder holds the class's own papers -- the syllabus, exam guides, the schedule -- and its one step is the class brief: reading those papers by the method's step 0 into class.md beside them, with exams.json for the exams and deadlines. Every deck in the class is given class.md at each of its steps.`,
       `The class brief is ${state}. No cards are made here.`,
       'When the person asks for a change to the brief, edit class.md in this folder. Exam and deadline dates are kept by the app, under Exams and Deadlines, where the person changes them.',
     ].join('\n');

@@ -229,7 +229,7 @@ function makeDeckView(sidecar: SidecarClient, say: (text: string, isError?: bool
 // cannot start is exactly what an update may fix, and without it a Windows
 // install of v0.1.6 -- whose engine never started -- could not update itself.
 function fail(message: string): void {
-  root.innerHTML = `<div class="dead"><h1>A.P.E.</h1><p class="error">${esc(message)}</p></div>`;
+  root.innerHTML = `<div class="dead"><h1>AnkiEngine</h1><p class="error">${esc(message)}</p></div>`;
   const dead = root.querySelector<HTMLElement>('.dead')!;
   void offerUpdate(dead, (text) => dead.insertAdjacentHTML('beforeend', `<p class="error">${esc(text)}</p>`));
 }

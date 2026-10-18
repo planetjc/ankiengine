@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A.P.E. — Lecture in. Deck out.</title>
-<meta name="description" content="Drop a lecture in, check each step, get an Anki deck out. A free desktop app for macOS, Windows and Linux.">
-<meta property="og:title" content="A.P.E. — Lecture in. Deck out.">
-<meta property="og:description" content="Drop a lecture in, check each step, get an Anki deck out. A free desktop app for macOS, Windows and Linux.">
+<title>AnkiEngine — Lecture in. Deck out.</title>
+<meta name="description" content="Drop a lecture in, check each step, get an Anki deck out. Works with the cards already in Anki, and plans a semester of classes around the exams. A free desktop app for macOS, Windows and Linux.">
+<meta property="og:title" content="AnkiEngine — Lecture in. Deck out.">
+<meta property="og:description" content="Drop a lecture in, check each step, get an Anki deck out. Works with the cards already in Anki, and plans a semester of classes around the exams. A free desktop app for macOS, Windows and Linux.">
 <meta name="theme-color" content="#FFD029">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFD029' stroke='%23241F0E' stroke-width='1' d='M4.4 2.2C3.6 12.6 11.4 20.4 21.6 20.4c1 0 1.3-1.2.4-1.7-.9-.5-1.5-1.1-1.9-1.9C14.2 15.7 9.4 11.1 8.4 5.2 8.2 4.1 7.6 3.1 6.7 2.4 5.9 1.8 4.5 1.3 4.4 2.2Z'/%3E%3C/svg%3E">
 <link rel="preload" href="fonts/recursive.woff2" as="font" type="font/woff2" crossorigin>
@@ -177,6 +177,96 @@ footer .wrap > div {
   .lede { font-size: 19px; }
   .btn { align-self: stretch; justify-content: center; }
   .tool { padding: 22px 20px; }
+}
+
+/* ---- the sections the page grew in v0.3.0 ------------------------------------------ */
+.pillars { display: flex; flex-wrap: wrap; gap: 10px; }
+.pillars a {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 99px;
+  border: 1.5px solid var(--ink); text-decoration: none; font-size: 15px; font-weight: 600;
+}
+.pillars a:hover { background: rgba(36, 31, 14, 0.08); }
+.pillars svg { width: 16px; height: 16px; flex: none; }
+.kicker { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.why { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 32px 80px; align-items: center; padding-block: 96px; border-bottom: 1px solid var(--line); }
+.why > div { display: flex; flex-direction: column; gap: 14px; }
+.why h2, .sec-head h2, .charge h2 { margin: 0; font-size: clamp(36px, 4.4vw, 52px); line-height: 1.02; font-weight: 750; letter-spacing: -0.02em; }
+.why figure { display: flex; flex-direction: column; gap: 16px; padding-left: 32px; border-left: 3px solid var(--banana); }
+.why blockquote { margin: 0; font-size: clamp(19px, 2vw, 24px); line-height: 1.45; text-wrap: pretty; }
+.why figcaption { margin: 0; font-size: 15px; color: var(--muted); }
+.sec { padding-top: 120px; display: flex; flex-direction: column; gap: 44px; }
+.sec-head { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 20px 80px; align-items: end; }
+.sec-head p { margin: 0; font-size: 18px; color: var(--body); text-wrap: pretty; }
+.cardrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+.cardrow > div { display: flex; flex-direction: column; gap: 16px; }
+.face {
+  min-height: 168px; box-sizing: border-box; padding: 20px 22px; display: grid; place-items: center; border-radius: 14px;
+  background: #333B45; color: #D7DEE9; box-shadow: 0 18px 34px -18px rgba(36, 31, 14, 0.55);
+  font-family: Menlo, 'SF Mono', ui-monospace, monospace; font-size: 15px; line-height: 1.55; text-align: center;
+}
+.face .h { font-weight: bold; color: #3CB371; }
+.face .s { font-weight: bold; color: #C695C6; }
+.face .f { color: #5EB3B3; }
+.face .v { color: #CD5C5C; font-style: italic; }
+.face.back { display: flex; flex-direction: column; gap: 12px; }
+.src { display: flex; gap: 12px; align-items: flex-start; padding-top: 12px; border-top: 1px solid #4A5563; font-size: 11.5px; line-height: 1.5; color: #A9B4C2; text-align: left; }
+.slide { flex: none; width: 76px; height: 50px; border-radius: 4px; display: grid; place-items: center; font-size: 9px; color: #D7DEE9; background: repeating-linear-gradient(135deg, #3E4856 0 6px, #46515F 6px 12px); }
+.recog { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.micro {
+  width: 150px; height: 72px; border-radius: 6px;
+  background: radial-gradient(circle at 30% 40%, #8C5A7A 0 9px, transparent 10px), radial-gradient(circle at 62% 58%, #8C5A7A 0 7px, transparent 8px), radial-gradient(circle at 78% 30%, #8C5A7A 0 6px, transparent 7px), #C9A3B9;
+}
+.cap { display: flex; flex-direction: column; gap: 4px; font-size: 16px; color: var(--body); }
+.cap .kicker { font-size: 11.5px; }
+.checks { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
+.checks li { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); }
+.checks li::before { content: '✓'; color: var(--good); }
+.tiles2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+.tile2 { display: flex; flex-direction: column; gap: 22px; padding: 30px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); }
+.tile2 > div:first-child { display: flex; flex-direction: column; gap: 8px; }
+.tile2 h3 { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 750; }
+.tile2 p { margin: 0; font-size: 16.5px; color: var(--body); }
+.mock { margin-top: auto; display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 12px; background: var(--cream); border: 1px solid var(--line); font-size: 14px; line-height: 1.5; }
+.mk { font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.field { padding: 9px 12px; border-radius: 8px; background: var(--panel); border: 1.5px solid var(--edge); font-size: 13.5px; }
+.field i { border-right: 1.5px solid var(--ink); padding-right: 1px; }
+.suggest { display: flex; flex-direction: column; margin-top: -6px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line-strong); box-shadow: 0 14px 24px -16px rgba(36, 31, 14, 0.5); font-size: 13px; overflow: hidden; }
+.suggest span { padding: 7px 12px; overflow-wrap: anywhere; }
+.suggest span:first-child { background: var(--raised); }
+.nbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 14px; border-radius: 10px; background: var(--banana); }
+.nbar > svg { width: 22px; height: 22px; flex: none; }
+.nbar .t { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nbar .k { font-size: 10px; line-height: 1.35; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600; color: #5C4C12; }
+.nbar strong { font-size: 18px; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.nbar .hint { font-size: 12.5px; line-height: 1.45; color: #3D3417; }
+.nbar .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.nbar .acts span { display: inline-flex; align-items: center; min-height: 36px; padding: 0 13px; border-radius: 7px; border: 1.5px solid var(--ink); font-size: 12.5px; font-weight: 500; }
+.nbar .acts .go { background: var(--ink); color: var(--banana); font-weight: 600; }
+.chip-new { align-self: flex-start; display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 6px 14px; border-radius: 16px; background: var(--raised); border: 1px solid var(--edge); font-size: 12px; }
+.chip-new b { color: #C0402A; }
+.chip-new em { font-style: normal; font-weight: 600; color: var(--accent); }
+.charge { padding-top: 120px; display: flex; flex-direction: column; gap: 40px; }
+.cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
+.cols3 > div { display: flex; flex-direction: column; gap: 10px; padding-top: 18px; border-top: 2px solid var(--ink); }
+.cols3 h3 { margin: 0; font-size: 24px; font-weight: 700; }
+.cols3 p { margin: 0; font-size: 16.5px; color: var(--body); }
+.faq { padding-top: 112px; display: flex; flex-direction: column; gap: 28px; }
+.faq h2 { margin: 0; font-size: clamp(34px, 3.6vw, 44px); line-height: 1.05; font-weight: 750; letter-spacing: -0.02em; }
+.qa { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 64px; }
+.qa > div { display: flex; flex-direction: column; gap: 8px; padding: 22px 0; border-top: 1px solid var(--line-strong); }
+.qa h3 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 700; }
+.qa p { margin: 0; font-size: 16px; color: var(--body); }
+@media (max-width: 1180px) {
+  .why, .sec-head { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 820px) {
+  .why { padding-block: 72px; }
+  .why figure { padding-left: 20px; }
+  .sec, .charge { padding-top: 88px; }
+  .faq { padding-top: 88px; }
+  .cardrow, .tiles2, .cols3, .qa { grid-template-columns: minmax(0, 1fr); }
+  .cols3 { gap: 28px; }
+  .tile2 { padding: 22px 20px; }
 }
 
 /* ---- the pictures' motion ------------------------------------------------------------ */
@@ -613,11 +703,12 @@ footer .wrap > div {
 
 <header class="band">
 <div class="wrap top">
-<a class="brand" href="./"><svg aria-hidden="true"><use href="#b"/></svg><span class="vd">A.P.E.</span></a>
+<a class="brand" href="./"><svg aria-hidden="true"><use href="#b"/></svg><span class="vd">AnkiEngine</span></a>
 <nav class="nav" aria-label="On this page">
 <a href="#how">How it works</a>
-<a href="#classes">Classes</a>
-<a href="#tool">Browser tool</a>
+<a href="#anki">Anki</a>
+<a href="#classes">School</a>
+<a href="#faq">FAQ</a>
 <a class="gh" href="https://github.com/planetjc/ape-go-bananas">GitHub</a>
 </nav>
 </div>
@@ -628,7 +719,7 @@ footer .wrap > div {
 <h1 class="wrap vd" id="hero-title">Lecture in.<br>Deck out.</h1>
 <div class="wrap hero-row">
 <div class="hero-copy">
-<p class="lede">Drop in the slides, the transcript and the objectives. An AI agent pulls out every fact, plans the cards and writes them. You check each step. Anki gets the deck.</p>
+<p class="lede">Drop in the slides, the transcript and the objectives. An AI agent writes the cards, you check each step, and Anki gets the deck. Set up a semester, and every deck is sized to the next exam.</p>
 <div class="dl" id="download">
 <a class="btn vb" id="dl" href="https://github.com/planetjc/ape-go-bananas/releases/latest">
 <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
@@ -637,8 +728,13 @@ footer .wrap > div {
 <span class="vm dl-meta" id="dl-meta">Free and open source · macOS, Windows, Linux</span>
 <span class="dl-other" id="dl-other">Every build is on the <a href="https://github.com/planetjc/ape-go-bananas/releases/latest">release page</a>.</span>
 </div>
+<nav class="pillars vb" aria-label="What it does">
+<a href="#cards"><svg aria-hidden="true"><use href="#b"/></svg>Writes the cards</a>
+<a href="#anki"><svg aria-hidden="true"><use href="#b"/></svg>Works with Anki</a>
+<a href="#classes"><svg aria-hidden="true"><use href="#b"/></svg>Plans the semester</a>
+</nav>
 </div>
-<figure class="hero-fig" aria-label="Sped-up animation: lecture files are dropped into the A.P.E. app, the eight steps fill in, and Send to Anki deals the cards onto the Anki deck, which counts up to six">
+<figure class="hero-fig" aria-label="Sped-up animation: lecture files are dropped into the AnkiEngine app, the eight steps fill in, and Send to Anki deals the cards onto the Anki deck, which counts up to six">
 <div class="fit" data-w="660" style="--w: 660; --h: 400">
 <div class="stage" aria-hidden="true" style="width: 660px; height: 400px">
 
@@ -649,7 +745,7 @@ footer .wrap > div {
 <span style="width: 7px; height: 7px; border-radius: 50%; background: #FF5F57"></span>
 <span style="width: 7px; height: 7px; border-radius: 50%; background: #FEBC2E"></span>
 <span style="width: 7px; height: 7px; border-radius: 50%; background: #28C840"></span>
-<span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 8.5px; font-weight: 600; color: #6E6243">A.P.E.</span>
+<span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 8.5px; font-weight: 600; color: #6E6243">AnkiEngine</span>
 </div>
 
 <div style="height: 40px; flex: none; overflow: hidden; background: #FFD029; border-bottom: 1px solid #E0B81C">
@@ -735,6 +831,17 @@ new cards
 </div>
 </section>
 
+<section class="wrap why" aria-labelledby="why-title">
+<div>
+<span class="vm kicker">Why it exists</span>
+<h2 class="vd" id="why-title">Making the deck was always the slow part.</h2>
+</div>
+<figure>
+<blockquote class="vb">“I have used Anki religiously for science and non-science classes for more than five years. The bottleneck was always making the decks.”</blockquote>
+<figcaption>— the person who built AnkiEngine</figcaption>
+</figure>
+</section>
+
 <section id="how" class="ink">
 <div class="wrap">
 <h2 class="vd">Three steps.<br>You sign off on each.</h2>
@@ -751,7 +858,7 @@ new cards
 </div>
 <div>
 <span class="n vd" aria-hidden="true">3</span>
-<h3 class="vd">Cards</h3>
+<h3 class="vd">Generate</h3>
 <p>Cloze cards written to the plan. Flag what reads wrong; an independent auditor and adjudicator rule on each flag.</p>
 </div>
 </div>
@@ -762,7 +869,7 @@ new cards
 <h2 class="vd">See how it works</h2>
 <p>One lecture, start to finish, in the real app. Sped up: each step takes minutes, and it waits for you at every review.</p>
 </div>
-<figure aria-label="Sped-up animation of the A.P.E. app making a deck: the agent extracts the facts, you read the inventory and approve it, it plans the cards, you approve the plan, it writes the cards, you preview them, the audit runs, and the deck is sent to Anki">
+<figure aria-label="Sped-up animation of the AnkiEngine app making a deck: the agent extracts the facts, you read the inventory and approve it, it plans the cards, you approve the plan, it writes the cards, you preview them, the audit runs, and the deck is sent to Anki">
 <div class="fit" data-w="780" style="--w: 780; --h: 520">
 <div class="stage" style="width: 780px; height: 520px">
 <div aria-hidden="true" style="position: relative; width: 780px; height: 520px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; background: #FFF9E3; border: 1px solid rgba(36, 31, 14, 0.35); box-shadow: 0 40px 70px -30px rgba(36, 31, 14, 0.55), 0 10px 24px -12px rgba(36, 31, 14, 0.3)">
@@ -771,7 +878,7 @@ new cards
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #FF5F57"></span>
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #FEBC2E"></span>
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #28C840"></span>
-<span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 12px; font-weight: 600; color: #6E6243">A.P.E.</span>
+<span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 12px; font-weight: 600; color: #6E6243">AnkiEngine</span>
 </div>
 
 <div style="flex: 1; display: flex; min-height: 0">
@@ -779,7 +886,7 @@ new cards
 <div style="width: 190px; flex: none; box-sizing: border-box; padding: 14px 12px 12px; display: flex; flex-direction: column; background: #FFFFFF; border-right: 1px solid #EADFAE">
 <div style="display: flex; align-items: center; gap: 7px">
 <svg width="20" height="20" viewBox="0 0 24 24" style="color: #FFD029"><use href="#b"></use></svg>
-<span class="vd" style="font-size: 17px; font-weight: 750; letter-spacing: -0.005em">A.P.E.</span>
+<span class="vd" style="font-size: 17px; font-weight: 750; letter-spacing: -0.005em">AnkiEngine</span>
 </div>
 <div class="vb" style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; padding: 2px; border-radius: 8px; background: #FFF9E3; border: 1px solid #EADFAE; font-size: 10px">
 <span style="padding: 3px 0; border-radius: 6px; text-align: center; background: #FFD029; font-weight: 600">Decks</span>
@@ -1066,32 +1173,85 @@ new cards
 </div>
 </section>
 
+<section id="cards" class="wrap sec" aria-labelledby="cards-title">
+<div class="sec-head">
+<h2 class="vd" id="cards-title">Generate high yield cards</h2>
+<p>Every card is a cloze with a hint that jogs the memory. The app checks every card, then an agent that wrote none of them reads the deck.</p>
+</div>
+<div class="cardrow">
+<div>
+<div class="face"><span><span class="h">[which cells?]</span> <u class="f">lay down</u> <span class="v">osteoid</span></span></div>
+<div class="cap"><span class="vm kicker">Front</span><span>A hint in every blank, so the question has one answer.</span></div>
+</div>
+<div>
+<div class="face back"><span><b class="s">Osteoblasts</b> <u class="f">lay down</u> <span class="v">osteoid</span></span><span class="src"><span class="slide" role="img" aria-label="The lecture slide the fact came from">slide 12</span><span>Source: “Osteoblasts lay down the unmineralized matrix, osteoid.” Bone-lecture.pdf, slide 12</span></span></div>
+<div class="cap"><span class="vm kicker">Back</span><span>The source line and the slide, so a doubt is settled in a second.</span></div>
+</div>
+<div>
+<div class="face"><span class="recog"><span class="micro" role="img" aria-label="A micrograph from the lecture"></span><span class="h">[which cell, ringed?]</span></span></div>
+<div class="cap"><span class="vm kicker">Recognition</span><span>When the exam shows a picture, so does the card.</span></div>
+</div>
+</div>
+<ul class="checks vm" aria-label="What every deck is checked for">
+<li>every cloze has a hint</li>
+<li>0 problems</li>
+<li>the source quoted on the back</li>
+<li>audited by an agent that wrote none of them</li>
+</ul>
+</section>
+
+<section id="anki" class="wrap sec" aria-labelledby="anki-title">
+<div class="sec-head">
+<h2 class="vd" id="anki-title">Works with cards already in Anki</h2>
+<p>AnkiEngine talks to Anki through the AnkiConnect add-on. It reads what the collection holds before it writes anything, and it never changes a card already there. No add-on? Export writes an .apkg to import by hand.</p>
+</div>
+<div class="tiles2">
+<div class="tile2">
+<div><h3 class="vd">Knows the decks</h3><p>The deck name offers the decks Anki already has. The planning step is told which cards that deck holds, so it does not write them twice.</p></div>
+<div class="mock" aria-hidden="true"><span class="vm mk">Deck</span><span class="vm field">Fall 2026::Histology::<i></i></span><span class="vm suggest"><span>Fall 2026::Histology::Bone</span><span>Fall 2026::Histology::Cartilage</span><span>Fall 2026::Histology::Muscle tissue</span></span></div>
+</div>
+<div class="tile2">
+<div><h3 class="vd">Knows what is studied</h3><p>Before anything is sent, the last step says how much of the deck is in Anki already, and how much of it has been studied.</p></div>
+<div class="mock" aria-hidden="true"><div class="nbar"><svg aria-hidden="true"><use href="#b"/></svg><div class="t"><span class="vm k">Next · step 8 of 8</span><strong class="vd">deliver</strong><span class="hint">40 of the 44 notes are already in Anki; a send adds the other 4. Fall 2026::Histology::Bone has 80 cards in Anki, 62 of them studied. Export writes an .apkg to import by hand instead.</span></div><div class="acts"><span class="vb">Export .apkg</span><span class="vb go">Send to Anki</span></div></div></div>
+</div>
+<div class="tile2">
+<div><h3 class="vd">No duplicates</h3><p>Every card has a stable identity. A send skips what Anki already has; a re-imported .apkg updates the cards in place.</p></div>
+<div class="mock" aria-hidden="true"><div class="nbar"><svg aria-hidden="true"><use href="#b"/></svg><div class="t"><span class="vm k">Done</span><strong class="vd">deliver</strong><span class="hint">Done. 4 cards added to Fall 2026::Histology::Bone; 40 were already there — open Anki and study.</span></div><div class="acts"><span class="vb">Export .apkg</span><span class="vb go">Send again</span></div></div></div>
+</div>
+<div class="tile2">
+<div><h3 class="vd">Add a file later</h3><p>Drop a study guide on a finished deck. Only what it adds becomes new cards; the ones in Anki stay word for word, review history and all.</p></div>
+<div class="mock" aria-hidden="true"><span class="vm chip-new"><b>PDF</b><span>study-guide.pdf</span><span>210 KB ·</span><em>new — not in the cards yet</em></span><div class="nbar"><svg aria-hidden="true"><use href="#b"/></svg><div class="t"><span class="vm k">Adding 1 file · step 1 of 8</span><strong class="vd">extract</strong><span class="hint">study-guide.pdf was added after the deck was made. The agent adds what it teaches to inventory.md; what is there stays as it is.</span></div><div class="acts"><span class="vb go">Run extract on the new file</span></div></div></div>
+</div>
+</div>
+</section>
+
 <section id="classes" class="wrap classes">
 <div class="classes-copy">
 <h2 class="vd">Manage classes, one semester at a time.</h2>
-<p>Switch to School and set up a semester and the classes in it. Give a class the syllabus, notes or study guide, and the agent turns them into a short brief every deck in the class reads. You read it first.</p>
+<p>Switch to School and set up a semester and the classes in it. Provide a syllabus, notes or study guide, and the agent turns them into a short brief every deck in the class reads. You read it first.</p>
 <ul class="points">
-<li><svg aria-hidden="true"><use href="#b"/></svg><span>The brief brings the exam dates and what is off the exam. Where it and the lecture objectives differ, the lecture wins.</span></li>
-<li><svg aria-hidden="true"><use href="#b"/></svg><span>Each deck is sized to fit a daily new-card limit before the exam.</span></li>
-<li><svg aria-hidden="true"><use href="#b"/></svg><span>Coming up lists every exam in the term, across all classes.</span></li>
+<li><svg aria-hidden="true"><use href="#b"/></svg><span>The brief brings the exam dates and formats, what is off the exam, and the course terms. Where it and the lecture objectives differ, the lecture wins.</span></li>
+<li><svg aria-hidden="true"><use href="#b"/></svg><span>Deadlines too: lab reports, problem sets, papers. Coming up puts them beside the exams and marks what falls this week.</span></li>
+<li><svg aria-hidden="true"><use href="#b"/></svg><span>Each deck is sized to fit a daily new-card limit before the exam it is studied for: the core cards first, the rest after.</span></li>
+<li><svg aria-hidden="true"><use href="#b"/></svg><span>A study guide handed out in week six updates the brief, and moves a date when it says so. A date set by hand stays.</span></li>
 <li><svg aria-hidden="true"><use href="#b"/></svg><span>Only want cards? Stay in Decks, and none of this shows.</span></li>
 </ul>
 </div>
-<figure aria-label="Two A.P.E. screens in School: the School view with the Fall 2026 semester, the exams coming up and a card per class; in front, the class screen for Fall 2026::Histology with the decks, class docs, brief and exams in it">
-<div class="fit" data-w="780" style="--w: 780; --h: 640">
-<div class="stage" aria-hidden="true" style="width: 780px; height: 640px">
-<div style="position: absolute; left: 140px; top: 0; width: 624px; height: 282px">
-<div style="width: 1040px; height: 470px; transform: scale(0.6); transform-origin: top left; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #FFF9E3; border: 1.5px solid #D3C48C; box-shadow: 0 40px 70px -34px rgba(36, 31, 14, 0.4)">
+<figure aria-label="Two AnkiEngine screens in School: the School view with the Fall 2026 semester, the exams coming up and a card per class; in front, the class screen for Fall 2026::Histology with the decks, class docs, brief, exams and deadlines in it">
+<div class="fit" data-w="780" style="--w: 780; --h: 780">
+<div class="stage" aria-hidden="true" style="width: 780px; height: 780px">
+<div style="position: absolute; left: 140px; top: 0; width: 624px; height: 294px">
+<div style="width: 1040px; height: 490px; transform: scale(0.6); transform-origin: top left; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #FFF9E3; border: 1.5px solid #D3C48C; box-shadow: 0 40px 70px -34px rgba(36, 31, 14, 0.4)">
 <div style="height: 32px; flex: none; box-sizing: border-box; position: relative; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #F3EBCD; border-bottom: 1px solid #EADFAE">
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #FF5F57"></span>
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #FEBC2E"></span>
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #28C840"></span>
-<span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 12.5px; font-weight: 600; color: #6E6243">A.P.E.</span>
+<span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 12.5px; font-weight: 600; color: #6E6243">AnkiEngine</span>
 </div>
 <div style="flex: 1; display: flex; min-height: 0; font-size: 14px; line-height: 1.5">
 
 <div style="width: 250px; flex: none; box-sizing: border-box; padding: 20px 18px 18px; display: flex; flex-direction: column; gap: 4px; background: #FFFFFF; border-right: 1px solid #EADFAE">
-<div style="display: flex; align-items: center; gap: 8px"><svg width="26" height="26" viewBox="0 0 24 24" style="color: #FFD029"><use href="#b"></use></svg><span class="vd" style="font-size: 23px; font-weight: 750; letter-spacing: -0.005em">A.P.E.</span></div>
+<div style="display: flex; align-items: center; gap: 8px"><svg width="26" height="26" viewBox="0 0 24 24" style="color: #FFD029"><use href="#b"></use></svg><span class="vd" style="font-size: 23px; font-weight: 750; letter-spacing: -0.005em">AnkiEngine</span></div>
 <div class="vb" style="margin: 8px 0 10px; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 9px; background: #FFF9E3; border: 1px solid #EADFAE; font-size: 12.5px">
 <span style="padding: 5px 0; border-radius: 6px; text-align: center; color: #6E6243; font-weight: 500">Decks</span>
 <span style="padding: 5px 0; border-radius: 6px; text-align: center; background: #FFD029; font-weight: 600">School</span>
@@ -1125,15 +1285,16 @@ new cards
 <div style="margin: 12px 0 0">
 <span class="vm" style="display: block; margin: 0 0 4px; font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #6E6243">Coming up</span>
 <div style="display: grid; grid-template-columns: 7ch max-content minmax(0, 1fr) max-content; column-gap: 12px; row-gap: 4px; align-items: baseline; font-size: 13px">
+<span class="vm" style="font-size: 12px; font-weight: 600; color: #0E7C8A">Sep 29</span><span style="font-weight: 500">Lab report 2</span><span style="font-size: 12.5px; color: #6E6243">Histology</span><span style="font-size: 12px; font-weight: 600">● due in 2 days</span>
+<span class="vm" style="font-size: 12px; font-weight: 600; color: #0E7C8A">Oct 2</span><span style="font-weight: 500">Problem set 3</span><span style="font-size: 12.5px; color: #6E6243">Biochemistry</span><span style="font-size: 12px; font-weight: 600">● due in 5 days</span>
 <span class="vm" style="font-size: 12px; font-weight: 600; color: #9A6400">Oct 14</span><strong>Midterm 1</strong><span style="font-size: 12.5px; color: #6E6243">Histology</span><span style="font-size: 12px; color: #6E6243">in 17 days</span>
 <span class="vm" style="font-size: 12px; font-weight: 600; color: #9A6400">Oct 21</span><strong>Exam 1</strong><span style="font-size: 12.5px; color: #6E6243">Physiology</span><span style="font-size: 12px; color: #6E6243">in 24 days</span>
-<span class="vm" style="font-size: 12px; font-weight: 600; color: #9A6400">Nov 4</span><strong>Quiz 3</strong><span style="font-size: 12.5px; color: #6E6243">Biochemistry</span><span style="font-size: 12px; color: #6E6243">in 38 days</span>
 </div>
 </div>
 <div style="margin: 14px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
-<div style="min-height: 92px; box-sizing: border-box; padding: 13px 15px; display: grid; gap: 4px; align-content: start; border-radius: 12px; background: #FFFFFF; border: 1px solid #E0B81C; box-shadow: inset 3px 0 0 #FFD029"><span class="vd" style="font-size: 15px; font-weight: 650">Histology</span><span style="font-size: 12.5px; font-weight: 600; color: #9A6400">Midterm 1 · in 17 days</span><span style="font-size: 12px; color: #6E6243">3 decks · brief read</span></div>
+<div style="min-height: 92px; box-sizing: border-box; padding: 13px 15px; display: grid; gap: 4px; align-content: start; border-radius: 12px; background: #FFFFFF; border: 1px solid #E0B81C; box-shadow: inset 3px 0 0 #FFD029"><span class="vd" style="font-size: 15px; font-weight: 650">Histology</span><span style="font-size: 12.5px; font-weight: 600; color: #9A6400">Midterm 1 · in 17 days</span><span style="font-size: 12px; font-weight: 500; color: #0E7C8A"><span style="color: #E0B81C">● </span>Lab report 2 · due in 2 days</span><span style="font-size: 12px; color: #6E6243">3 decks · brief read</span></div>
 <div style="min-height: 92px; box-sizing: border-box; padding: 13px 15px; display: grid; gap: 4px; align-content: start; border-radius: 12px; background: #FFFFFF; border: 1px solid #EADFAE"><span class="vd" style="font-size: 15px; font-weight: 650">Physiology</span><span style="font-size: 12.5px; font-weight: 600; color: #9A6400">Exam 1 · in 24 days</span><span style="font-size: 12px; color: #6E6243">2 decks · brief read</span></div>
-<div style="min-height: 92px; box-sizing: border-box; padding: 13px 15px; display: grid; gap: 4px; align-content: start; border-radius: 12px; background: #FFFFFF; border: 1px solid #EADFAE"><span class="vd" style="font-size: 15px; font-weight: 650">Biochemistry</span><span style="font-size: 12.5px; font-weight: 600; color: #9A6400">Quiz 3 · in 38 days</span><span style="font-size: 12px; color: #6E6243">1 deck · brief to read</span></div>
+<div style="min-height: 92px; box-sizing: border-box; padding: 13px 15px; display: grid; gap: 4px; align-content: start; border-radius: 12px; background: #FFFFFF; border: 1px solid #EADFAE"><span class="vd" style="font-size: 15px; font-weight: 650">Biochemistry</span><span style="font-size: 12.5px; font-weight: 600; color: #9A6400">Quiz 3 · in 38 days</span><span style="font-size: 12px; font-weight: 500; color: #0E7C8A"><span style="color: #E0B81C">● </span>Problem set 3 · due in 5 days</span><span style="font-size: 12px; color: #6E6243">1 deck · brief to read</span></div>
 <div style="min-height: 92px; box-sizing: border-box; padding: 13px 15px; display: grid; gap: 4px; align-content: center; border-radius: 12px; border: 1px dashed #D3C48C"><span class="vd" style="font-size: 14px; font-weight: 650; color: #9A6400">+ New class</span><span style="font-size: 12px; color: #6E6243">in Fall 2026</span></div>
 </div>
 </div>
@@ -1142,18 +1303,18 @@ new cards
 </div>
 </div>
 
-<div style="position: absolute; left: 0; top: 214px; width: 640px; height: 422px">
-<div style="width: 1000px; height: 660px; transform: scale(0.64); transform-origin: top left; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #FFF9E3; border: 1.5px solid #D3C48C; box-shadow: 0 50px 80px -34px rgba(36, 31, 14, 0.55), 0 14px 30px -14px rgba(36, 31, 14, 0.25)">
+<div style="position: absolute; left: 0; top: 214px; width: 640px; height: 556px">
+<div style="width: 1000px; height: 868px; transform: scale(0.64); transform-origin: top left; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; border-radius: 16px; background: #FFF9E3; border: 1.5px solid #D3C48C; box-shadow: 0 50px 80px -34px rgba(36, 31, 14, 0.55), 0 14px 30px -14px rgba(36, 31, 14, 0.25)">
 <div style="height: 32px; flex: none; box-sizing: border-box; position: relative; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #F3EBCD; border-bottom: 1px solid #EADFAE">
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #FF5F57"></span>
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #FEBC2E"></span>
 <span style="width: 11px; height: 11px; border-radius: 50%; background: #28C840"></span>
-<span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 12.5px; font-weight: 600; color: #6E6243">A.P.E.</span>
+<span style="position: absolute; left: 0; right: 0; text-align: center; font-size: 12.5px; font-weight: 600; color: #6E6243">AnkiEngine</span>
 </div>
 <div style="flex: 1; display: flex; min-height: 0; font-size: 14px; line-height: 1.5">
 
 <div style="width: 250px; flex: none; box-sizing: border-box; padding: 20px 18px 18px; display: flex; flex-direction: column; gap: 4px; background: #FFFFFF; border-right: 1px solid #EADFAE">
-<div style="display: flex; align-items: center; gap: 8px"><svg width="26" height="26" viewBox="0 0 24 24" style="color: #FFD029"><use href="#b"></use></svg><span class="vd" style="font-size: 23px; font-weight: 750; letter-spacing: -0.005em">A.P.E.</span></div>
+<div style="display: flex; align-items: center; gap: 8px"><svg width="26" height="26" viewBox="0 0 24 24" style="color: #FFD029"><use href="#b"></use></svg><span class="vd" style="font-size: 23px; font-weight: 750; letter-spacing: -0.005em">AnkiEngine</span></div>
 <div class="vb" style="margin: 8px 0 10px; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 9px; background: #FFF9E3; border: 1px solid #EADFAE; font-size: 12.5px">
 <span style="padding: 5px 0; border-radius: 6px; text-align: center; color: #6E6243; font-weight: 500">Decks</span>
 <span style="padding: 5px 0; border-radius: 6px; text-align: center; background: #FFD029; font-weight: 600">School</span>
@@ -1214,16 +1375,23 @@ new cards
 <span class="vb" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #D3C48C; font-size: 12.5px; font-weight: 500; color: #6E6243">Read the brief</span>
 </div>
 
-<div style="display: flex; align-items: center; gap: 10px; margin: 0 0 9px"><span class="vm" style="font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #6E6243">Exams <span style="letter-spacing: 0; margin-left: 6px">3</span></span><span style="flex: 1"></span><span class="vb" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #D3C48C; font-size: 12px; font-weight: 500; color: #6E6243">Add exam</span></div>
+<div style="display: flex; align-items: center; gap: 10px; margin: 0 0 9px"><span class="vm" style="font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #6E6243">Exams <span style="letter-spacing: 0; margin-left: 6px">2</span></span><span style="flex: 1"></span><span class="vb" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #D3C48C; font-size: 12px; font-weight: 500; color: #6E6243">Add exam</span></div>
 <div style="display: flex; flex-direction: column; gap: 6px">
 <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) 150px minmax(0, 1.4fr) minmax(0, 1.4fr) 26px; gap: 8px; align-items: center; padding: 5px 6px 5px 8px; border-radius: 10px; background: #FFFFFF; border: 1px solid #EADFAE; font-size: 13px">
 <span style="padding: 5px 7px; font-weight: 600">Midterm 1</span><span class="vm" style="padding: 5px 7px; font-size: 12.5px">10/14/2026</span><span style="padding: 5px 7px">Bone, cartilage</span><span style="font-size: 12px; line-height: 1.4; color: #6E6243">in 17 days · about 340 new cards fit at 20 a day</span><span style="text-align: center; font-size: 15px; color: #6E6243">×</span>
 </div>
 <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) 150px minmax(0, 1.4fr) minmax(0, 1.4fr) 26px; gap: 8px; align-items: center; padding: 5px 6px 5px 8px; border-radius: 10px; background: #FFFFFF; border: 1px solid #EADFAE; font-size: 13px">
-<span style="padding: 5px 7px; font-weight: 600">Midterm 2</span><span class="vm" style="padding: 5px 7px; font-size: 12.5px">11/18/2026</span><span style="padding: 5px 7px">Muscle, nervous tissue</span><span style="font-size: 12px; line-height: 1.4; color: #6E6243">in 52 days · about 1040 new cards fit at 20 a day</span><span style="text-align: center; font-size: 15px; color: #6E6243">×</span>
+<span style="padding: 5px 7px; font-weight: 600">Final</span><span class="vm" style="padding: 5px 7px; font-size: 12.5px">12/15/2026</span><span style="padding: 5px 7px">Everything</span><span style="font-size: 12px; line-height: 1.4; color: #6E6243">in 79 days · about 1580 new cards fit at 20 a day</span><span style="text-align: center; font-size: 15px; color: #6E6243">×</span>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 10px; margin: 16px 0 9px"><span class="vm" style="font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #6E6243">Deadlines <span style="letter-spacing: 0; margin-left: 6px">2</span></span><span style="flex: 1"></span><span class="vb" style="padding: 5px 12px; border-radius: 8px; border: 1px solid #D3C48C; font-size: 12px; font-weight: 500; color: #6E6243">Add deadline</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: grid; grid-template-columns: minmax(0, 1.1fr) 150px minmax(0, 1.4fr) minmax(0, 1.4fr) 26px; gap: 8px; align-items: center; padding: 5px 6px 5px 8px; border-radius: 10px; background: #FFFFFF; border: 1px solid #EADFAE; font-size: 13px">
+<span style="padding: 5px 7px; font-weight: 600">Lab report 2</span><span class="vm" style="padding: 5px 7px; font-size: 12.5px">09/29/2026</span><span style="padding: 5px 7px">Bone histology, 10%</span><span style="font-size: 12px; line-height: 1.4; color: #6E6243">due in 2 days</span><span style="text-align: center; font-size: 15px; color: #6E6243">×</span>
 </div>
 <div style="display: grid; grid-template-columns: minmax(0, 1.1fr) 150px minmax(0, 1.4fr) minmax(0, 1.4fr) 26px; gap: 8px; align-items: center; padding: 5px 6px 5px 8px; border-radius: 10px; background: #FFFFFF; border: 1px solid #EADFAE; font-size: 13px">
-<span style="padding: 5px 7px; font-weight: 600">Final</span><span class="vm" style="padding: 5px 7px; font-size: 12.5px">12/15/2026</span><span style="padding: 5px 7px">Everything</span><span style="font-size: 12px; line-height: 1.4; color: #6E6243">in 79 days · about 1580 new cards fit at 20 a day</span><span style="text-align: center; font-size: 15px; color: #6E6243">×</span>
+<span style="padding: 5px 7px; font-weight: 600">Problem set 4</span><span class="vm" style="padding: 5px 7px; font-size: 12.5px">10/21/2026</span><span style="padding: 5px 7px">Ch. 4–5</span><span style="font-size: 12px; line-height: 1.4; color: #6E6243">due in 24 days</span><span style="text-align: center; font-size: 15px; color: #6E6243">×</span>
 </div>
 </div>
 </div>
@@ -1235,6 +1403,15 @@ new cards
 </div>
 </div>
 </figure>
+</section>
+
+<section class="wrap charge" aria-labelledby="charge-title">
+<h2 class="vd" id="charge-title">You stay in charge.</h2>
+<div class="cols3">
+<div><h3 class="vd">Talk to it</h3><p>Tell the agent what to change, in plain words, at any step. A message sent while it works steers the run it is in.</p></div>
+<div><h3 class="vd">Flag what reads wrong</h3><p>Flags, and whatever the audit finds, go to an adjudicator that wrote none of the cards. It approves, fixes or cuts each one.</p></div>
+<div><h3 class="vd">Stop, cancel, put back</h3><p>Stop keeps what a step wrote; Cancel offers it for the trash. A deleted deck or file waits 30 days, with Undo.</p></div>
+</div>
 </section>
 
 <section class="wrap pair">
@@ -1254,6 +1431,18 @@ new cards
 <div>
 <h2 class="vd">Keep everything local.</h2>
 <p>Only what goes to the agent leaves the computer. No accounts, no server, no telemetry. Course folders stay where they are, API keys go to the OS keychain, and updates install only with a click.</p>
+</div>
+</section>
+
+<section id="faq" class="wrap faq" aria-labelledby="faq-title">
+<h2 class="vd" id="faq-title">Questions</h2>
+<div class="qa">
+<div><h3 class="vd">Does Anki have to be open?</h3><p>Only to send cards straight in, with the AnkiConnect add-on (code 2055492159). Without it, Export writes an .apkg to double-click.</p></div>
+<div><h3 class="vd">Will it make cards Anki already has?</h3><p>No. It reads the deck first, plans around what is there, and a send skips any note Anki already holds.</p></div>
+<div><h3 class="vd">What does it cost?</h3><p>The app is free and open source. The generation is done by an AI agent on a subscription you already pay for, or by any model through an OpenRouter key.</p></div>
+<div><h3 class="vd">Which files can it read?</h3><p>Slides as PDF, transcripts, notes and objectives as text, and images. Keynote or PowerPoint files need exporting to PDF first.</p></div>
+<div><h3 class="vd">Is it only for science classes?</h3><p>No. Any course with slides, a transcript or notes to learn from works the same way.</p></div>
+<div><h3 class="vd">Is School required?</h3><p>No. Decks is the whole app for anyone who only wants cards; semesters, classes and exams never show there.</p></div>
 </div>
 </section>
 

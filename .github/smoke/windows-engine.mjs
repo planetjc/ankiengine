@@ -6,12 +6,14 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-// Per-user by default, machine-wide if the installer was told to.
+// Per-user by default, machine-wide if the installer was told to. The folder
+// is named for the product (AnkiEngine; APE up to v0.3.2), the program in it
+// for the Cargo binary, which kept its name.
 const dir = [process.env.LOCALAPPDATA, process.env.ProgramFiles]
   .filter(Boolean)
-  .map((d) => join(d, 'APE'))
+  .map((d) => join(d, 'AnkiEngine'))
   .find((d) => existsSync(join(d, 'ape-app.exe')));
-if (!dir) throw new Error('no installed ape-app.exe');
+if (!dir) throw new Error('no installed AnkiEngine\\ape-app.exe, under LOCALAPPDATA or ProgramFiles');
 
 function engine() {
   const out = execFileSync(

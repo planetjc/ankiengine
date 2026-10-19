@@ -19,7 +19,7 @@
 // never sees a class.
 //
 // It is the same code in the desktop app and on the tool page when
-// `ape-bridge` opens it -- the host (engine/host.ts) is what differs. The
+// `ankiengine-bridge` opens it -- the host (engine/host.ts) is what differs. The
 // deck view is injected, because that is the one thing the two shells do
 // differently: the desktop app loads, checks, renders and exports through
 // the sidecar's deck/* methods on the Node engine; the tool page does all
@@ -1079,7 +1079,7 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
   show('home');
   showAgentLine();
   void (async () => {
-    // The folder the host was opened on (ape-bridge's argument), else the deck from last time.
+    // The folder the host was opened on (ankiengine-bridge's argument), else the deck from last time.
     const given = host.courseRoot();
     const last = remember.get(REMEMBER.deck);
     const first = given ?? last;

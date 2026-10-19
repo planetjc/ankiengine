@@ -118,7 +118,7 @@ footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
 footer a { color: var(--accent); }
 
 
-/* ---- agent mode: what ape-bridge turns this page into ------------------
+/* ---- agent mode: what ankiengine-bridge turns this page into -----------
    The shell's own styles come from the app (the @import at the top); this
    is only the page layout around them. */
 body.with-rail #shell { display: grid; grid-template-columns: 230px 1fr; min-height: 100vh; }

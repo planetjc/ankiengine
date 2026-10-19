@@ -10,6 +10,7 @@
   "bin": {
     "ape": "dist/cli/index.js",
     "ape-sidecar": "dist/sidecar/index.js",
+    "ankiengine-bridge": "dist/bridge/index.js",
     "ape-bridge": "dist/bridge/index.js"
   },
   "scripts": {

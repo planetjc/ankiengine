@@ -3,7 +3,7 @@
 //
 // Two hosts implement this. The desktop app's (tauri-host.ts) reaches the
 // sidecar that Rust spawned, over Tauri's invoke and events. The bridge's
-// (site/src/engine/bridge-transport.ts) reaches `ape-bridge` on the user's
+// (site/src/engine/bridge-transport.ts) reaches `ankiengine-bridge` on the user's
 // machine over loopback HTTP, from a page. A third ran the sidecar inside
 // the browser tab on WebContainer and was retired (docs/HANDOFF.md §3).
 // Same program, same method table, same JSON-RPC -- only the pipe differs,

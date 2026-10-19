@@ -1,7 +1,7 @@
 // The page's side of the bridge: JSON-RPC over one EventSource and POSTs to
 // 127.0.0.1 -- the mirror of src/sidecar/serve.ts.
 //
-// Where the connection details come from: the URL fragment. `ape-bridge`
+// Where the connection details come from: the URL fragment. `ankiengine-bridge`
 // prints a URL like `<page>#bridge=http://127.0.0.1:9100&token=…&data=…`,
 // and a fragment is the one part of a URL a browser never sends to the
 // server hosting the page, so the token that lets this page drive an agent
@@ -108,7 +108,7 @@ export class Bridge implements EngineHost {
         // bridge is not there or refused us, and that is the one to surface.
         if (!ready) {
           source.close();
-          reject(new EngineError(-32000, 'could not reach the bridge -- is `ape-bridge` still running?'));
+          reject(new EngineError(-32000, 'could not reach the bridge -- is `ankiengine-bridge` still running?'));
         }
       };
     });

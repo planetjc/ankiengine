@@ -453,7 +453,7 @@ $('mediafile').addEventListener('change', (e) => {
 $('export').addEventListener('click', () => void exportApkg());
 
 // ---- agent mode --------------------------------------------------------------
-// When `ape-bridge` opened this page -- its details are in the fragment --
+// When `ankiengine-bridge` opened this page -- its details are in the fragment --
 // the page becomes the app: the same shell the desktop app runs
 // (app/src/agent/app.ts), over the bridge instead of Tauri, with this page's
 // in-tab engine as the deck view. A developer's route: the shell can be
@@ -475,8 +475,8 @@ import { Bridge, locateBridge } from './engine/bridge-transport.js';
         await bridge.connect();
       } catch {
         showError(
-          `This page was opened by ape-bridge, but the bridge cannot be reached. ` +
-            `Is it still running in your terminal? If your browser asked to allow access to your local network, it needs a yes. ` +
+          `This page was opened by ankiengine-bridge, but the bridge cannot be reached. ` +
+            `Is it still running in the terminal? If the browser asked to allow access to the local network, it needs a yes. ` +
             `Brave blocks websites from reaching this computer unless you add this site under brave://settings/content/localhostAccess.`,
         );
         return;

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// `ape-bridge`: the sidecar as a local server, so the browser page can drive
-// an agent that runs on this machine -- see docs/APP.md, "Stage 3".
+// `ankiengine-bridge`: the sidecar as a local server, so the browser page can
+// drive an agent that runs on this machine -- see docs/APP.md, "Stage 3".
+// (`ape-bridge`, the first name for the same file, still works.)
 //
 // A web page cannot launch Claude Code; that is the browser sandbox. This is
 // the one process a subscriber runs so that the page has something to talk
@@ -52,7 +53,7 @@ interface Args {
 }
 
 function usage(): string {
-  return `usage: ape-bridge [course-folder] [options]
+  return `usage: ankiengine-bridge [course-folder] [options]
 
   course-folder        the folder of lecture material to work on (optional; the page can ask)
 
@@ -156,7 +157,7 @@ async function main(): Promise<void> {
 
   const major = Number(process.versions.node.split('.')[0]);
   if (major < NODE_FLOOR) {
-    throw new Error(`ape-bridge needs Node ${NODE_FLOOR} or newer (this is ${process.versions.node}); Claude Code needs the same, so upgrading Node fixes both`);
+    throw new Error(`ankiengine-bridge needs Node ${NODE_FLOOR} or newer (this is ${process.versions.node}); Claude Code needs the same, so upgrading Node fixes both`);
   }
 
   if (args.courseDir !== null && (!existsSync(args.courseDir) || !statSync(args.courseDir).isDirectory())) {
@@ -192,7 +193,7 @@ async function main(): Promise<void> {
   const url = `${site.href}#${params.toString()}`;
 
   process.stdout.write(
-    `\nape-bridge ${info.version} on http://127.0.0.1:${server.port} (Node ${info.node})\n` +
+    `\nankiengine-bridge ${info.version} on http://127.0.0.1:${server.port} (Node ${info.node})\n` +
       `  method files : ${process.env.APE_METHOD_DIR}\n` +
       `  data         : ${data}\n` +
       (args.courseDir !== null ? `  course folder: ${args.courseDir}\n` : '') +
@@ -206,6 +207,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  process.stderr.write(`ape-bridge: ${err instanceof Error ? err.message : String(err)}\n`);
+  process.stderr.write(`ankiengine-bridge: ${err instanceof Error ? err.message : String(err)}\n`);
   process.exit(1);
 });

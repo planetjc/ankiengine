@@ -6,11 +6,11 @@
 // and every stage prompt carries this note: the eight steps as the rail shows
 // them, which is running, and what the agent may do about them.
 //
-// It answers with a line of its own at the end of a reply -- "APE: done
-// extract", "APE: run organize" -- which the app checks against the folder
-// before acting. A line of text rather than a tool, so it works the same for
-// every agent, the embedded OpenRouter loop included. No imports but types,
-// so the tests run it as it is.
+// It answers with a line of its own at the end of a reply -- "AnkiEngine:
+// done extract", "AnkiEngine: run organize" -- which the app checks against
+// the folder before acting. A line of text rather than a tool, so it works
+// the same for every agent, the embedded OpenRouter loop included. No
+// imports but types, so the tests run it as it is.
 
 import type { StageId } from '../../../dist/pipeline/index.js';
 
@@ -43,8 +43,8 @@ export function stepsNote(steps: Step[], deck: string, added: string[] = []): st
     running ? `Running now: ${running.stage}.` : next ? `Nothing is running; next is ${next.stage}.` : 'Nothing is running.',
     'Keep to the step in front of you. Do not start another step\'s work on your own, and do not redo a step that is done unless the person asks.',
     'You can move the sidebar by ending your reply with a line of its own, one per action:',
-    '  APE: done <step>  — that step is finished. A writing step counts only if its file is in the course folder; a review step only when the person has said, here, that it is right.',
-    '  APE: run <step>   — start the step that is next, when the person wants to go on.',
+    '  AnkiEngine: done <step>  — that step is finished. A writing step counts only if its file is in the course folder; a review step only when the person has said, here, that it is right.',
+    '  AnkiEngine: run <step>   — start the step that is next, when the person wants to go on.',
     'The app checks each line against the folder, does it or says why not, and shows the person what happened.',
   ].join('\n');
 }
@@ -54,7 +54,10 @@ export interface Directive {
   stage: StageId;
 }
 
-const LINE = /^[ \t>*_`]*APE:[ \t]*(done|run)[ \t]+(.+?)[ \t*_`.]*$/gim;
+// The app asks for "AnkiEngine:" and still reads "APE:", the name it asked
+// for before: an agent partway through a conversation keeps writing what the
+// note it was first given said.
+const LINE = /^[ \t>*_`]*(?:AnkiEngine|APE):[ \t]*(done|run)[ \t]+(.+?)[ \t*_`.]*$/gim;
 
 /** The directives a reply ends with, in order; a step name the app does not have is left out. */
 export function directives(text: string): Directive[] {

@@ -6,12 +6,16 @@ all of it to the desktop app in `app/` (`docs/APP.md`), in TypeScript. Every cla
 about what works here is backed by a command in [Status](#status) that was
 actually run. It was called A.P.E. until v0.3, for **Anki Process Engine**, the name the
 method's own repository has had all along; it is AnkiEngine now, after the domain.
-The app's file names (`APE.app`, the `APE-*` downloads) keep the old letters, so
-installed copies go on updating.
+The downloads are `AnkiEngine-*` and the Mac app is `AnkiEngine.app`; a copy
+updated in place from an older version keeps the file name `APE.app` on disk and
+shows AnkiEngine. What still says ape does so on purpose: the app ID
+`com.ankiengine.ape`, which locates everyone's data and so cannot change, and
+names only developers meet (the `ape` command, the `ape-app` program inside the
+bundle, the `APE_*` environment variables).
 
 ## Use it
 
-Download the desktop app from <https://planetjc.github.io/ape-go-bananas/>
+Download the desktop app from <https://ankiengine.com/>
 (`docs/APP.md`). Make a deck, drop the lecture's files on the window —
 slides as PDF, the transcript, the objectives — pick an agent you already
 pay for once in Settings (a Claude, Gemini or Codex subscription, or any
@@ -22,7 +26,7 @@ folder. The browser tool at `/tool/` checks a finished `deck.json` and
 exports the `.apkg` with nothing installed.
 
 For development, the same shell runs in a browser without building the
-app: `npx -p github:planetjc/ape-go-bananas ape-bridge` starts the engine
+app: `npx -p github:planetjc/ankiengine ankiengine-bridge` starts the engine
 on this machine and opens the tool page attached to it (`src/bridge/`,
 Node ≥ 20). It is a developer route, not advertised on the pages.
 
@@ -175,7 +179,7 @@ file agree there too.
   `index.ts` speaks it over stdio for the desktop app, `serve.ts` over HTTP
   and Server-Sent Events on loopback for the browser page. `deck/export`
   loads `node:sqlite` lazily so everything else runs on Node 20.
-- `src/bridge/` — `ape-bridge`: the sidecar as a local server, for the
+- `src/bridge/` — `ankiengine-bridge`: the sidecar as a local server, for the
   browser page. Prints a URL with a per-run token in the fragment, opens it,
   fetches the method files once, and binds 127.0.0.1 only. The one command
   a subscriber runs; needs Node ≥ 20, which Claude Code needs too.
@@ -188,7 +192,7 @@ file agree there too.
 - `site/` — the website, its own npm project like `app/`. `/` is the
   download page; `/tool/` runs the engine in the tab (checks, review,
   `.apkg` export, nothing installed, nothing uploaded) and, when opened by
-  `ape-bridge`, becomes the app's shell over the bridge. Carries sql.js and
+  `ankiengine-bridge`, becomes the app's shell over the bridge. Carries sql.js and
   fflate so the engine keeps its zero-dependency rule.
 - `test/integration/` — drives the built CLI as a real child process
   (never `checkDeck`/`renderReview`/`writeApkg` called directly) through

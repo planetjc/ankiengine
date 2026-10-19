@@ -2,17 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <!-- Merged by tauri build over the Info.plist it generates. The app is
-       AnkiEngine wherever macOS shows a name; productName stays "APE" because it
-       also names APE.app, the updater's APE.app.tar.gz and the download
-       files, and renaming those would strand installed copies.
-       CFBundleName (menu bar, About, Cmd-Tab) is set by bundle.macOS.bundleName.
-       Finder, the Dock and Launchpad name an app by its file, APE.app, unless
-       the bundle carries a localized name -- and macOS only honours that when
-       this unlocalized CFBundleDisplayName matches the file name; otherwise it
-       takes the difference for a rename by the user and shows the file name.
-       So it is "APE" here, and en.lproj/InfoPlist.strings (bundle.macOS.files)
-       says AnkiEngine. Tried on a copy of APE.app before shipping. -->
+  <!-- Merged by tauri build over the Info.plist it generates. productName is
+       AnkiEngine, so a new install is AnkiEngine.app; CFBundleName (menu bar,
+       About, Cmd-Tab) comes from bundle.macOS.bundleName.
+       This "APE" is for the copies already out there. The updater replaces the
+       bundle where it sits and keeps its file name, so a copy updated from 0.3.2
+       or earlier is still APE.app on disk. Finder, the Dock and Launchpad name
+       an app by its file unless it carries a localized name, which macOS honours
+       only when this unlocalized CFBundleDisplayName matches the file name; so
+       it is "APE" here and en.lproj/InfoPlist.strings (bundle.macOS.files) says
+       AnkiEngine. AnkiEngine.app does not match, so it shows its file name,
+       which is AnkiEngine too. Tried on copies named APE.app. -->
   <key>CFBundleDisplayName</key><string>APE</string>
   <key>LSHasLocalizedDisplayName</key><true/>
 </dict>

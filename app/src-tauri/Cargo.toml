@@ -1,7 +1,7 @@
 [package]
 name = "ape-app"
 version = "0.3.2"
-description = "Tauri shell over the A.P.E. engine"
+description = "Tauri shell over the AnkiEngine engine"
 edition = "2021"
 
 [lib]

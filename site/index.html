@@ -709,7 +709,7 @@ footer .wrap > div {
 <a href="#anki">Anki</a>
 <a href="#classes">School</a>
 <a href="#faq">FAQ</a>
-<a class="gh" href="https://github.com/planetjc/ape-go-bananas">GitHub</a>
+<a class="gh" href="https://github.com/planetjc/ankiengine">GitHub</a>
 </nav>
 </div>
 </header>
@@ -721,12 +721,12 @@ footer .wrap > div {
 <div class="hero-copy">
 <p class="lede">Drop in the slides, the transcript and the objectives. An AI agent writes the cards, you check each step, and Anki gets the deck. Set up a semester, and every deck is sized to the next exam.</p>
 <div class="dl" id="download">
-<a class="btn vb" id="dl" href="https://github.com/planetjc/ape-go-bananas/releases/latest">
+<a class="btn vb" id="dl" href="https://github.com/planetjc/ankiengine/releases/latest">
 <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
 <span id="dl-label">Download</span>
 </a>
 <span class="vm dl-meta" id="dl-meta">Free and open source · macOS, Windows, Linux</span>
-<span class="dl-other" id="dl-other">Every build is on the <a href="https://github.com/planetjc/ape-go-bananas/releases/latest">release page</a>.</span>
+<span class="dl-other" id="dl-other">Every build is on the <a href="https://github.com/planetjc/ankiengine/releases/latest">release page</a>.</span>
 </div>
 <nav class="pillars vb" aria-label="What it does">
 <a href="#cards"><svg aria-hidden="true"><use href="#b"/></svg>Writes the cards</a>
@@ -1471,7 +1471,7 @@ new cards
 
 <footer>
 <div class="wrap"><div>
-<span>Free and open source · <a href="https://github.com/planetjc/ape-go-bananas">Source and issues on GitHub</a> · The method lives in <a href="https://github.com/planetjc/anki-process-engine-live">a separate repository</a></span>
+<span>Free and open source · <a href="https://github.com/planetjc/ankiengine">Source and issues on GitHub</a> · The method lives in <a href="https://github.com/planetjc/anki-process-engine-live">a separate repository</a></span>
 <span class="vm" id="ver"></span>
 </div></div>
 </footer>
@@ -1490,17 +1490,21 @@ new cards
 // The button offers the build for this computer, from the latest release.
 // Without the API (offline, rate-limited) it stays a link to the release page.
 (async () => {
-  const REL = 'https://github.com/planetjc/ape-go-bananas/releases/latest';
+  const REL = 'https://github.com/planetjc/ankiengine/releases/latest';
   const $ = (id) => document.getElementById(id);
   let rel;
   try {
-    const r = await fetch('https://api.github.com/repos/planetjc/ape-go-bananas/releases/latest');
+    const r = await fetch('https://api.github.com/repos/planetjc/ankiengine/releases/latest');
     if (!r.ok) return;
     rel = await r.json();
   } catch { return; }
   // The stable names only: every release also carries the same files under
-  // versioned names, and listing both would offer each download twice.
-  const assets = (rel.assets || []).filter((a) => /^APE-/.test(a.name) && !/\.sig$/.test(a.name));
+  // versioned names (with an underscore), and listing both would offer each
+  // download twice. Releases from before the rename call the stable ones
+  // APE-*, later ones AnkiEngine-*; taking either keeps the button working
+  // whichever release is latest. The picks below match on the end of the
+  // name, so they are the same for both.
+  const assets = (rel.assets || []).filter((a) => /^(APE|AnkiEngine)-/.test(a.name) && !/\.sig$/.test(a.name));
   const pick = (re) => assets.find((a) => re.test(a.name));
   const builds = {
     arm: { a: pick(/macos-arm64\.dmg$/), os: 'macOS', tag: 'Apple silicon', name: 'Apple silicon Macs' },

@@ -453,7 +453,7 @@ wasteful.
   (`planetjc/anki-process-engine-live`), fetched at run time. `SETUP.md`
   sits at the repository root, not in `method/` — the bridge fetches both.
 - The live tool page is
-  <https://planetjc.github.io/ape-go-bananas/tool/>; `pages.yml` deploys it
+  <https://ankiengine.com/tool/>; `pages.yml` deploys it
   on every push to `main`.
 
 ---

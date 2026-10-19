@@ -198,8 +198,8 @@ engine call respawns the sidecar and the window reloads (`sidecar.rs`,
 ## Stage 3: the browser page drives a local agent through a bridge
 
 A tab cannot spawn Claude Code — that is the browser sandbox, not a gap. So
-the subscriber runs one command — `npx -p github:planetjc/ape-go-bananas
-ape-bridge [course-folder]`, which builds itself on the first run because
+the subscriber runs one command — `npx -p github:planetjc/ankiengine
+ankiengine-bridge [course-folder]`, which builds itself on the first run because
 npm runs `prepare` on a git install — and the page does the rest. The bridge is `src/sidecar` — the same method table the
 Rust shell drove over stdio — listening on `127.0.0.1` (`src/sidecar/serve.ts`):
 one Server-Sent Events stream carries everything outbound in the order the
@@ -207,7 +207,7 @@ sidecar said it, and requests arrive as newline-delimited JSON-RPC in POST
 bodies. The Rust shell, the bundled Node, signing and the updater are not
 needed for this path; the sidecar survived unchanged and gained a transport.
 
-**Node floor.** `ape-bridge` starts on Node 20 (verified on 20.18.1, which has
+**Node floor.** `ankiengine-bridge` starts on Node 20 (verified on 20.18.1, which has
 no `node:sqlite` at all): `deck/export` defers its import to first use and the
 page exports `.apkg` itself, so nothing the bridge does at start needs 24.
 
@@ -248,8 +248,8 @@ disk) → one owner flag → audit in a fresh session (16 findings, four angles)
 applies (19 notes) → deck reloads clean → export. The final `deck.json`,
 exported with `ape export`, imports into Anki 26.5: 19 notes, 38 cards.
 
-**From the published site, same day.** The live page at
-`planetjc.github.io/ape-go-bananas/tool/` reached a bridge on the same Mac
+**From the published site, same day.** The live page (`ankiengine.com/tool/`
+now; it was on GitHub Pages then) reached a bridge on the same Mac
 from Chrome 152 with no local-network prompt at all: `/health` 200, the
 event stream 200, RPCs 202, the picker rendered. Brave refused the same
 fetch silently — it blocks sites from reaching `127.0.0.1` unless the site
@@ -642,3 +642,53 @@ looked and what came back, and a Check for updates button that offers the
 bar even for a version put off. A failed install keeps the bar, with the
 reason and Try again. Only builds from v0.3.2 on behave this way: an older
 copy still looks once per launch.
+
+**The rename, finished (2026-10-19).** The name came in pieces: the window
+title, the menu bar and the site first, then the Finder and the Dock through a
+localized bundle name. What was left was everything the operating system names
+from `productName`, which is now `AnkiEngine` as well: the Mac bundle, the DMG
+volume, the Windows install folder, Start menu shortcut and installed-programs
+entry, and the Linux package names. The downloads follow it
+(`AnkiEngine-macos-arm64.dmg`, `AnkiEngine-macos-intel.dmg`,
+`AnkiEngine-windows-x64-setup.exe`, `AnkiEngine-linux-x64.AppImage` and
+`.deb`); earlier releases keep their `APE-*` files, and the download page
+takes either prefix so it works whichever release is the latest.
+
+Windows is where a rename can lose something. The installer takes its folder
+from the product name, so installing over an old copy would have put
+AnkiEngine beside APE, listed twice in Installed apps, with a second shortcut
+that starts the old one. The installer's hook
+(`app/src-tauri/windows/installer-hooks.nsh`) removes the old APE install when
+it finds one and leaves the data alone, and the release's `smoke-windows` job
+proves it by doing what the updater does: it installs the previous release,
+puts a file where the app keeps its data, installs the new build over it with
+`/UPDATE` (the mode that makes no shortcuts, so the hook moves them), and
+checks that the old folder, shortcuts and entry are gone, an AnkiEngine
+shortcut is there, and the file survived. On Linux the `.deb` is a new
+package name owning the same files, so it declares that it replaces and
+conflicts with `ape`.
+A Mac copy that updated in place keeps `APE.app` on disk, because the updater
+puts the new version into the bundle where it sits and does not rename it; the
+Finder, the Dock and the menu bar show AnkiEngine through the localized name.
+Only a fresh download is `AnkiEngine.app`.
+
+The repository is `planetjc/ankiengine` now. GitHub redirects the old
+address, but every link in the code, the site and the docs points at the new
+one. The updater did not move: it asks
+`https://ankiengine.com/latest.json`, which the rename does not touch, so
+installed copies keep finding updates. The agent is now asked to end a reply
+with `AnkiEngine: done <step>` or `AnkiEngine: run <step>`; the parser still
+accepts `APE:`, because an agent partway through a conversation keeps writing
+the line its first note showed. The bridge command is `ankiengine-bridge`, and
+`ape-bridge` stays in `bin` on the same file so instructions written before
+the rename still work.
+
+What still says ape does so on purpose. The bundle identifier
+`com.ankiengine.ape` names the folder of every person's data, so changing it
+would open the app empty for everyone. The `ape.*` keys in the webview's
+storage and the hidden `.ape-deck.json`, `.ape-class.json` and
+`.ape-before.json` files in people's folders are how existing settings and
+decks are found, so they stay for the same reason. The rest (the `ape-app`
+program inside the bundle, the `APE_*` environment variables, the `ape` and
+`ape-app` npm packages and the `ape` command) are names only developers
+meet, and renaming them would only break what already points at them.

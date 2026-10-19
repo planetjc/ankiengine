@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "The A.P.E. download page, and the browser tool: checks, review and .apkg export with nothing installed -- and, when ape-bridge opens it, the desktop app's shell over the bridge.",
+  "description": "The AnkiEngine download page, and the browser tool: checks, review and .apkg export with nothing installed -- and, when ankiengine-bridge opens it, the shell of the desktop app over the bridge.",
   "engines": {
     "node": ">=24.12.0"
   },

@@ -100,6 +100,10 @@ jobs:
             not notarized with Apple, so on macOS the first launch is: double-click →
             "cannot be opened" → System Settings → Privacy & Security → **Open Anyway**,
             once. Windows shows a SmartScreen warning: **More info → Run anyway**.
+
+            Already installed? The app updates itself. On a Mac that had the app
+            before it was called AnkiEngine, installing from the download instead
+            leaves the old APE.app beside the new one: delete APE.app afterwards.
           releaseDraft: false
           # A prerelease until `verify` promotes it. GitHub's "latest" is what
           # the download page, its links (releases/latest/download/...) and the
@@ -114,7 +118,7 @@ jobs:
           args: ${{ matrix.args }}
 
       # Version-free copies, so a link written once keeps working:
-      # https://github.com/planetjc/ape-go-bananas/releases/latest/download/APE-<platform>.<ext>
+      # https://github.com/planetjc/ankiengine/releases/latest/download/AnkiEngine-<platform>.<ext>
       - name: stable-name copies on the release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -126,10 +130,10 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           copy() { src=$(ls $1 2>/dev/null | head -1); [ -n "$src" ] || return 0; cp "$src" "$2"; gh release upload "$tag" "$2" --clobber --repo "$GITHUB_REPOSITORY"; }
           case "${{ matrix.triple }}" in
-            aarch64-apple-darwin)      copy 'aarch64-apple-darwin/release/bundle/dmg/*.dmg' APE-macos-arm64.dmg ;;
-            x86_64-apple-darwin)       copy 'x86_64-apple-darwin/release/bundle/dmg/*.dmg' APE-macos-intel.dmg ;;
-            x86_64-pc-windows-msvc)    copy 'release/bundle/nsis/*-setup.exe' APE-windows-x64-setup.exe ;;
-            x86_64-unknown-linux-gnu)  copy 'release/bundle/appimage/*.AppImage' APE-linux-x64.AppImage; copy 'release/bundle/deb/*.deb' APE-linux-x64.deb ;;
+            aarch64-apple-darwin)      copy 'aarch64-apple-darwin/release/bundle/dmg/*.dmg' AnkiEngine-macos-arm64.dmg ;;
+            x86_64-apple-darwin)       copy 'x86_64-apple-darwin/release/bundle/dmg/*.dmg' AnkiEngine-macos-intel.dmg ;;
+            x86_64-pc-windows-msvc)    copy 'release/bundle/nsis/*-setup.exe' AnkiEngine-windows-x64-setup.exe ;;
+            x86_64-unknown-linux-gnu)  copy 'release/bundle/appimage/*.AppImage' AnkiEngine-linux-x64.AppImage; copy 'release/bundle/deb/*.deb' AnkiEngine-linux-x64.deb ;;
           esac
 
   # The updater feed, from every signature the build jobs uploaded. One job
@@ -160,16 +164,26 @@ jobs:
           node .github/release/updater-feed.mjs "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > latest.json
           gh release upload "$GITHUB_REF_NAME" latest.json --repo "$GITHUB_REPOSITORY" --clobber
 
-  # The Windows build, installed on a clean machine and started: is its engine
-  # running? v0.1.0 through v0.1.6 shipped an engine that never started on
-  # Windows (a \\?\ path, sidecar.rs) and every other check passed, because
-  # every other check reads files, not processes. A failure here also holds
-  # back `verify`'s mark and promotion, so neither installs already out there
-  # nor new downloads get the broken build.
+  # The Windows build, installed the way a user on the previous release gets
+  # it, and started. Two ways to ship a broken Windows app pass every other
+  # check, because every other check reads files, not an installed app:
+  # - v0.1.0 through v0.1.6 shipped an engine that never started on Windows
+  #   (a \\?\ path, sidecar.rs). windows-engine.mjs starts the install and
+  #   asks whether the engine is running.
+  # - Renaming the product to AnkiEngine moved the install from
+  #   %LOCALAPPDATA%\APE to %LOCALAPPDATA%\AnkiEngine, so an upgrade can leave
+  #   the old app behind, or take the user's data with it.
+  #   windows-upgrade.mjs installs the previous release, then this one over
+  #   it, and checks what is left.
+  # A failure of either also holds back `verify`'s mark and promotion, so
+  # neither installs already out there nor new downloads get the broken build.
   smoke-windows:
     needs: build
     if: always() && startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
+    # Two installs, two downloads and the engine check take a few minutes; a
+    # stuck installer must not hold the release unpromoted for six hours.
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -177,14 +191,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.12.0'
-      - name: install the released Windows build
-        shell: bash
+      - name: upgrade from the previous release to the released Windows build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern APE-windows-x64-setup.exe
-          ./APE-windows-x64-setup.exe //S
-          sleep 5
+        run: node .github/smoke/windows-upgrade.mjs
       - name: its engine starts and stays up
         run: node .github/smoke/windows-engine.mjs
 
@@ -284,7 +294,7 @@ jobs:
           # The stable names are what the download page links to; the versioned
           # bundles being present says nothing about these.
           names=$(gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name')
-          for a in APE-macos-arm64.dmg APE-macos-intel.dmg APE-windows-x64-setup.exe APE-linux-x64.AppImage APE-linux-x64.deb; do
+          for a in AnkiEngine-macos-arm64.dmg AnkiEngine-macos-intel.dmg AnkiEngine-windows-x64-setup.exe AnkiEngine-linux-x64.AppImage AnkiEngine-linux-x64.deb; do
             if ! grep -qx "$a" <<<"$names"; then
               echo "::error::$a is missing from $tag — the download page links to it"
               bad=1
@@ -297,7 +307,7 @@ jobs:
           fi
           echo "$tag is complete: every platform in latest.json, every stable-name asset present."
 
-      - name: the Windows build runs
+      - name: the Windows build upgrades and runs
         if: needs.smoke-windows.result != 'success'
         run: |
           echo "::error::smoke-windows did not pass (${{ needs.smoke-windows.result }}); the updater feed is left on the previous release. Fix, re-run smoke-windows, then re-run this job."

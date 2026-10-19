@@ -102,8 +102,8 @@ export function mountChat(host: HTMLElement, sidecar: SidecarClient, bus: Bus, c
     if (!steps || found.length === 0) return;
     for (const el of drawn) el.textContent = withoutDirectives(el.textContent ?? '');
     for (const d of found) {
-      const result = await steps.act(d).catch((err: unknown) => `APE: ${d.verb} ${d.stage} failed — ${err instanceof Error ? err.message : String(err)}`);
-      append('tool', `APE: ${d.verb} ${d.stage} → ${result}`, true);
+      const result = await steps.act(d).catch((err: unknown) => `AnkiEngine: ${d.verb} ${d.stage} failed — ${err instanceof Error ? err.message : String(err)}`);
+      append('tool', `AnkiEngine: ${d.verb} ${d.stage} → ${result}`, true);
       current = null;
     }
   }

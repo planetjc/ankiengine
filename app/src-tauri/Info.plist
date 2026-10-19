@@ -6,7 +6,14 @@
        AnkiEngine wherever macOS shows a name; productName stays "APE" because it
        also names APE.app, the updater's APE.app.tar.gz and the download
        files, and renaming those would strand installed copies.
-       CFBundleName (menu bar, About, Cmd-Tab) is set by bundle.macOS.bundleName. -->
-  <key>CFBundleDisplayName</key><string>AnkiEngine</string>
+       CFBundleName (menu bar, About, Cmd-Tab) is set by bundle.macOS.bundleName.
+       Finder, the Dock and Launchpad name an app by its file, APE.app, unless
+       the bundle carries a localized name -- and macOS only honours that when
+       this unlocalized CFBundleDisplayName matches the file name; otherwise it
+       takes the difference for a rename by the user and shows the file name.
+       So it is "APE" here, and en.lproj/InfoPlist.strings (bundle.macOS.files)
+       says AnkiEngine. Tried on a copy of APE.app before shipping. -->
+  <key>CFBundleDisplayName</key><string>APE</string>
+  <key>LSHasLocalizedDisplayName</key><true/>
 </dict>
 </plist>

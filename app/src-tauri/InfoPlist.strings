@@ -1,0 +1,3 @@
+/* The name Finder, the Dock and Launchpad show for APE.app. See Info.plist. */
+CFBundleDisplayName = "AnkiEngine";
+CFBundleName = "AnkiEngine";

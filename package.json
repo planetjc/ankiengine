@@ -1,6 +1,6 @@
 {
   "name": "ape",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "description": "Deck-pipeline structural checks, .apkg export, an ACP client, and a stdio sidecar over all three.",

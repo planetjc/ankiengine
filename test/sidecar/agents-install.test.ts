@@ -231,7 +231,7 @@ test('agents/install for an id absent from the registry fails with -32602 or -32
   assert.equal(await s.end(), 0);
 });
 
-test('agents/install is -32000 with npm\'s last stderr line when the packument 404s', { timeout: INSTALL_TIMEOUT }, async () => {
+test('agents/install is -32000 with npm\'s account of the error when the packument 404s', { timeout: INSTALL_TIMEOUT }, async () => {
   const dataDir = makeTmpDir();
   const s = spawnSidecar();
   await s.ready;
@@ -241,7 +241,10 @@ test('agents/install is -32000 with npm\'s last stderr line when the packument 4
   assert.ok(npm.requests.includes('GET /fake-missing-agent'), 'npm asked the fake registry for the packument');
   const stderrLines = progressFor(s, 'fake-missing').filter((p) => p.stream === 'stderr' && p.line.trim().length > 0);
   assert.ok(stderrLines.length >= 1, 'npm\'s error output was forwarded as stderr progress');
-  assert.ok(err.message.includes(stderrLines[stderrLines.length - 1].line), `message carries the last stderr line:\n${err.message}\nvs\n${stderrLines[stderrLines.length - 1].line}`);
+  // npm's last line only says where its log is; the message carries the line
+  // that says what went wrong (npmError), which for a 404 names the URL.
+  assert.ok(/404/.test(err.message), `message says what went wrong:\n${err.message}`);
+  assert.ok(!/A complete log of this run/.test(err.message), `message is not npm's pointer to its log:\n${err.message}`);
   assert.equal(typeof (err.data as { name?: unknown } | undefined)?.name, 'string', '§3: data.name is the error class name');
   assert.ok(s.lines.every(isJsonRpcLine));
   assert.equal(await s.end(), 0);

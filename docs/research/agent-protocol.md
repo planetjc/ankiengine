@@ -66,8 +66,18 @@ sidecar's own Node** (`process.execPath`) and npm resolved as: env
 notification `agents/progress { id, stream: "stdout" | "stderr", line }`.
 `bin` is the resolved absolute path of the package's `bin` entry (the sole
 entry, or the one named after the package's unscoped name), read from the
-installed `package.json`. Non-zero npm exit → `-32000` with the last stderr
-line in the message. An entry whose distribution is not `npx` → `-32602`.
+installed `package.json`. Non-zero npm exit → `-32000` with npm's own
+account of the error in the message: the first `npm error` line that is not a
+detail key (`code`, `syscall`, `path`, `dest`, `errno`) or the closing "A
+complete log of this run can be found in …", which is all the last line ever
+says. An install that exits 0 but leaves out an optional dependency built for
+this platform (`…-<os>-<arch>`, how the Claude agent ships its program) →
+`-32000` too. One install at a time per agent: a second `agents/install` for
+the same id while one runs gets the first one's result. Before npm runs, the
+`node_modules/[@scope/].<name>-<8 chars>` folders an earlier install cut short
+left behind are removed (npm picks the same name every time, so one leftover
+fails every later install with ENOTEMPTY). An entry whose distribution is not
+`npx` → `-32602`.
 
 ### `agents/uninstall`
 params `{ dataDir, id }` → `{ id, removed: boolean }` — removes

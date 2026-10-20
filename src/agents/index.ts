@@ -5,7 +5,7 @@
 // there. Nothing here knows what an agent says; it only puts one on disk.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 
 export const DEFAULT_REGISTRY_URL = 'https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json';
@@ -305,25 +305,47 @@ export interface InstallResult {
   bin: string;
 }
 
+// One install at a time per agent. A second request while one runs -- a
+// second press of Update during a download that takes minutes -- is handed
+// the first one's result: two npm runs in one prefix wreck each other (the
+// second one's rollback took the first one's half-written Claude program).
+const installing = new Map<string, Promise<InstallResult>>();
+
 export function installAgent(
   dataDir: string,
   entry: RegistryEntry,
   opts: { registry?: string; onProgress?: (stream: 'stdout' | 'stderr', line: string) => void; fetchImpl?: typeof fetch } = {},
 ): Promise<InstallResult> {
-  if (entry.distribution === 'binary') return installBinary(dataDir, entry, opts);
+  const key = `${resolve(dataDir)}\0${entry.id}`;
+  const running = installing.get(key);
+  if (running) return running;
+  const run = entry.distribution === 'binary' ? installBinary(dataDir, entry, opts) : installNpx(dataDir, entry, opts);
+  const settled = run.finally(() => installing.delete(key));
+  installing.set(key, settled);
+  return settled;
+}
+
+function installNpx(
+  dataDir: string,
+  entry: RegistryEntry,
+  opts: { registry?: string; onProgress?: (stream: 'stdout' | 'stderr', line: string) => void },
+): Promise<InstallResult> {
   if (entry.npx === undefined) return Promise.reject(new RangeError(`${entry.id}: distribution is ${entry.distribution}, only npx and binary entries can be installed`));
   const prefix = prefixFor(dataDir, entry.id);
   mkdirSync(prefix, { recursive: true });
+  clearRetired(prefix);
   const spec = entry.npx.package.includes('@', 1) || entry.version === '' ? entry.npx.package : `${entry.npx.package}@${entry.version}`;
   const npm = npmCommand();
-  const args = [...npm.args, 'install', '--prefix', prefix, '--save-exact', '--no-audit', '--no-fund', '--no-package-lock'];
+  // The Node beside the app, on macOS, takes npm's process title for an app of its own (keep-title.ts).
+  const quiet = process.platform === 'darwin' && npm.command === process.execPath ? ['--import', new URL('./keep-title.js', import.meta.url).href] : [];
+  const args = [...quiet, ...npm.args, 'install', '--prefix', prefix, '--save-exact', '--no-audit', '--no-fund', '--no-package-lock'];
   const registry = opts.registry ?? process.env.APE_NPM_REGISTRY;
   if (registry) args.push('--registry', registry);
   args.push(spec);
 
   return new Promise<InstallResult>((resolvePromise, reject) => {
     const child = spawn(npm.command, args, { cwd: prefix, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, npm_config_update_notifier: 'false' } });
-    let lastErr = '';
+    const errLines: string[] = [];
     const pump = (stream: 'stdout' | 'stderr') => {
       let buf = '';
       child[stream]!.on('data', (chunk: Buffer) => {
@@ -333,13 +355,13 @@ export function installAgent(
           const line = buf.slice(0, i).replace(/\r$/, '');
           buf = buf.slice(i + 1);
           if (line.trim() === '') continue;
-          if (stream === 'stderr') lastErr = line;
+          if (stream === 'stderr') errLines.push(line);
           opts.onProgress?.(stream, line);
         }
       });
       child[stream]!.on('end', () => {
         if (buf.trim() !== '') opts.onProgress?.(stream, buf);
-        if (stream === 'stderr' && buf.trim() !== '') lastErr = buf.trim();
+        if (stream === 'stderr' && buf.trim() !== '') errLines.push(buf.trim());
       });
     };
     pump('stdout');
@@ -347,7 +369,8 @@ export function installAgent(
     child.on('error', (err) => reject(new Error(`npm failed to start: ${err.message}`)));
     child.on('exit', (code) => {
       if (code !== 0) {
-        reject(new Error(`npm install ${spec} exited ${code}${lastErr ? `: ${lastErr}` : ''}`));
+        const why = npmError(errLines);
+        reject(new Error(`npm install ${spec} exited ${code}${why ? `: ${why}` : ''}`));
         return;
       }
       const version = installedVersion(dataDir, entry);
@@ -356,9 +379,91 @@ export function installAgent(
         reject(new Error(`npm install ${spec} finished but ${packageName(entry.npx!.package)} has no package.json/bin under ${prefix}`));
         return;
       }
+      const missing = missingPlatformPackages(prefix);
+      if (missing.length > 0) {
+        reject(new Error(`npm install ${spec} finished without ${missing.join(', ')}, the part built for this computer, so the agent cannot start. Install it again.`));
+        return;
+      }
       resolvePromise({ id: entry.id, package: packageName(entry.npx!.package), version, bin });
     });
   });
+}
+
+/**
+ * What went wrong, from npm's stderr. Its last line is only "A complete log of
+ * this run can be found in ...", and the lines before name the error code and
+ * paths one by one; the first line that says something is the one to show.
+ */
+export function npmError(lines: readonly string[]): string {
+  const said = lines.map((l) => /^npm (?:error|ERR!) ?(.*)$/.exec(l)?.[1]?.trim()).filter((l): l is string => !!l);
+  const detail = /^(?:code|syscall|path|dest|errno|A complete log of this run|Log files were not written)\b/;
+  return said.find((l) => !detail.test(l)) ?? said.find((l) => l.startsWith('code ')) ?? lines.at(-1)?.trim() ?? '';
+}
+
+/**
+ * npm moves a package it is replacing to node_modules/[@scope/].<name>-<8 chars>
+ * and deletes it once the install is done. An install cut short leaves it
+ * behind, and since the name comes from a hash of the path, the next install
+ * of that package picks the same one and fails with ENOTEMPTY -- every time.
+ * Only called while no npm runs in the prefix (installAgent's one-at-a-time).
+ */
+export function clearRetired(prefix: string): string[] {
+  const nm = join(prefix, 'node_modules');
+  const dirs = [nm];
+  const removed: string[] = [];
+  let top: string[];
+  try {
+    top = readdirSync(nm);
+  } catch {
+    return removed;
+  }
+  for (const d of top) if (d.startsWith('@')) dirs.push(join(nm, d));
+  for (const dir of dirs) {
+    for (const name of dir === nm ? top : readdirSync(dir)) {
+      if (!/^\.(?!\.).+-[A-Za-z0-9_-]{8}$/.test(name)) continue;
+      const path = join(dir, name);
+      if (!statSync(path).isDirectory()) continue;
+      rmSync(path, { recursive: true, force: true });
+      removed.push(path);
+    }
+  }
+  return removed;
+}
+
+/**
+ * Optional dependencies built for this platform that npm left out. npm drops
+ * an optional package it could not install and still exits 0 -- which is how
+ * Claude's agent once installed without its program, a per-platform optional
+ * package (@anthropic-ai/claude-agent-sdk-darwin-arm64). Named <...>-<os>-<arch>
+ * or <scope>/<os>-<arch>, the way such packages are.
+ */
+export function missingPlatformPackages(prefix: string, platform: string = process.platform, arch: string = process.arch): string[] {
+  const nm = join(prefix, 'node_modules');
+  const target = `${platform}-${arch}`;
+  const packages: string[] = [];
+  try {
+    for (const d of readdirSync(nm)) {
+      if (d.startsWith('.')) continue;
+      if (d.startsWith('@')) for (const s of readdirSync(join(nm, d))) packages.push(join(nm, d, s));
+      else packages.push(join(nm, d));
+    }
+  } catch {
+    return [];
+  }
+  const missing = new Set<string>();
+  for (const dir of packages) {
+    let optional: Record<string, unknown> = {};
+    try {
+      optional = (JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { optionalDependencies?: Record<string, unknown> }).optionalDependencies ?? {};
+    } catch {
+      continue;
+    }
+    for (const dep of Object.keys(optional)) {
+      if (!dep.endsWith(`-${target}`) && !dep.endsWith(`/${target}`)) continue;
+      if (!existsSync(join(nm, dep, 'package.json')) && !existsSync(join(dir, 'node_modules', dep, 'package.json'))) missing.add(dep);
+    }
+  }
+  return [...missing];
 }
 
 export function uninstallAgent(dataDir: string, id: string): boolean {

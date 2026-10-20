@@ -98,8 +98,11 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
     const state_ = p.kind === 'api' ? 'any model, one API key' : p.installed ? `installed ${p.installedVersion}${newer ? ` · ${newer} available` : ''}` : p.installable ? `v${p.version ?? '?'}` : `${p.distribution} — not installable from here yet`;
     const useLabel = isConnected ? 'Reconnect' : state.hasFolder ? 'Use' : 'Use';
     const useTitle = state.hasFolder ? '' : 'Remembered now; connects when a course folder is chosen';
-    const actions =
-      p.kind === 'api'
+    // While it installs, nothing to press: a second Update during a download
+    // that takes minutes once started a second npm in the same folder.
+    const actions = progress.has(p.id)
+      ? ''
+      : p.kind === 'api'
         ? `<input type="password" placeholder="sk-or-…" data-key="${esc(p.id)}" autocomplete="off"><button type="button" data-use="${esc(p.id)}" title="${useTitle}">${useLabel}</button>`
         : p.installed
           ? `<button type="button" data-use="${esc(p.id)}" title="${useTitle}">${useLabel}</button>${
@@ -156,7 +159,8 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
 
   /** npm install into the agent's own prefix: a first install, or an update over the old one. */
   async function installNow(id: string): Promise<boolean> {
-    progress.set(id, ['installing…']);
+    if (progress.has(id)) return false;
+    progress.set(id, ['installing… this can take a few minutes on a slow connection']);
     render();
     let ok = false;
     try {

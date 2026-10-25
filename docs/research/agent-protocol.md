@@ -262,6 +262,12 @@ A plain loop over `POST /chat/completions` with `stream: true`:
 - HTTP 401 → `-32000` `"OpenRouter rejected the API key"`; 402 → `-32000`
   `"OpenRouter: insufficient credits"`; 429 → retry once after 2 s, then
   `-32000`; other non-2xx → `-32000` with `error.message`.
+- No HTTP answer at all (on `/key`, `/models` or `/chat/completions`) →
+  `-32000` `"Could not reach OpenRouter at <host>: <reason> (<code>). <hint>"`,
+  the reason read from the `code` on fetch's `cause`: the name could not be
+  looked up, the connection was refused / cut off / timed out, no network
+  route, or the security certificate was not trusted. Never a bare
+  `"fetch failed"`.
 - `agent/cancel` aborts the fetch; the turn resolves `"cancelled"` and the
   partial assistant text is kept in history.
 

@@ -57,9 +57,76 @@ export function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 }
 
-/** `GET /key`: 401 -> "OpenRouter rejected the API key"; any other non-2xx -> the body's `error.message`. Resolves on success. */
+/**
+ * A request that got no HTTP answer at all. Node's fetch says only "fetch
+ * failed"; what stopped it is the `code` on its `cause` (an AggregateError,
+ * when a name resolved to several addresses, carries the code and an empty
+ * message). The message names the host and the likely culprit, and keeps the
+ * code for whoever reads a report.
+ */
+export function unreachable(url: string, err: unknown): OpenRouterError {
+  return new OpenRouterError(`Could not reach OpenRouter at ${hostOf(url)}: ${reasonFor(causeCode(err), err)}`);
+}
+
+const DNS_CODES = new Set(['ENOTFOUND', 'EAI_AGAIN', 'EAI_FAIL', 'EAI_NONAME', 'EAI_NODATA']);
+const CUT_OFF_CODES = new Set(['ECONNRESET', 'ECONNABORTED', 'EPIPE', 'UND_ERR_SOCKET']);
+const TIMEOUT_CODES = new Set(['ETIMEDOUT', 'ESOCKETTIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT']);
+const NO_ROUTE_CODES = new Set(['ENETUNREACH', 'ENETDOWN', 'EHOSTUNREACH', 'EHOSTDOWN', 'EADDRNOTAVAIL']);
+
+function reasonFor(code: string | undefined, err: unknown): string {
+  if (code === undefined) return `${detailOf(err)}.`;
+  if (DNS_CODES.has(code)) return `the name could not be looked up (${code}). Check the internet connection.`;
+  if (code === 'ECONNREFUSED') return `the connection was refused (${code}). A firewall, VPN or proxy may be blocking it.`;
+  if (CUT_OFF_CODES.has(code)) return `the connection was cut off (${code}). A firewall, VPN or proxy may be blocking it.`;
+  if (TIMEOUT_CODES.has(code)) return `the connection timed out (${code}). Check the internet connection, VPN or firewall.`;
+  if (NO_ROUTE_CODES.has(code)) return `there is no network route to it (${code}). Check the internet connection.`;
+  if (/CERT|SSL|TLS/.test(code)) {
+    return `its security certificate was not trusted (${code}). Antivirus, a VPN or a work network that inspects secure connections can cause this.`;
+  }
+  return `${detailOf(err)} (${code}).`;
+}
+
+/** The first string `code` on the error, its `cause` chain, or an AggregateError's `errors`. */
+function causeCode(err: unknown, depth = 0): string | undefined {
+  if (typeof err !== 'object' || err === null || depth > 5) return undefined;
+  const r = err as { code?: unknown; cause?: unknown; errors?: unknown };
+  if (typeof r.code === 'string' && r.code.length > 0) return r.code;
+  if (Array.isArray(r.errors)) {
+    for (const inner of r.errors) {
+      const c = causeCode(inner, depth + 1);
+      if (c) return c;
+    }
+  }
+  return causeCode(r.cause, depth + 1);
+}
+
+/** The deepest non-empty message along the `cause` chain: "fetch failed" says less than what caused it. */
+function detailOf(err: unknown): string {
+  let detail = err instanceof Error ? err.message : String(err);
+  let e: unknown = err instanceof Error ? err.cause : undefined;
+  for (let depth = 0; e instanceof Error && depth < 5; depth++, e = e.cause) {
+    if (e.message) detail = e.message;
+  }
+  return detail;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** `GET /key`: 401 -> "OpenRouter rejected the API key"; any other non-2xx -> the body's `error.message`; no answer -> `unreachable`. Resolves on success. */
 export async function validateKey(baseUrl: string, apiKey: string, fetchImpl: typeof fetch = fetch): Promise<void> {
-  const res = await fetchImpl(endpoint(baseUrl, 'key'), { method: 'GET', headers: authHeaders(apiKey) });
+  const url = endpoint(baseUrl, 'key');
+  let res: Response;
+  try {
+    res = await fetchImpl(url, { method: 'GET', headers: authHeaders(apiKey) });
+  } catch (e) {
+    throw unreachable(url, e);
+  }
   if (res.ok) {
     await res.text().catch(() => undefined);
     return;
@@ -77,7 +144,12 @@ export async function listModels(baseUrl: string, apiKey: string, fetchImpl: typ
   for (let page = 0; page < 20; page++) {
     if (seen.has(url)) break;
     seen.add(url);
-    const res = await fetchImpl(url, { method: 'GET', headers: authHeaders(apiKey) });
+    let res: Response;
+    try {
+      res = await fetchImpl(url, { method: 'GET', headers: authHeaders(apiKey) });
+    } catch (e) {
+      throw unreachable(url, e);
+    }
     if (!res.ok) {
       if (res.status === 401) throw new OpenRouterError('OpenRouter rejected the API key', 401);
       const message = await readErrorMessage(res);

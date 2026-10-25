@@ -19,7 +19,7 @@ import type {
   ToolCallContent,
   UsageUpdate,
 } from '../acp/protocol.js';
-import { OpenRouterError, authHeaders, endpoint, readErrorMessage, type OpenRouterModel } from './models.js';
+import { OpenRouterError, authHeaders, endpoint, readErrorMessage, unreachable, type OpenRouterModel } from './models.js';
 import { TurnAccumulator, sseData, type ReasoningDetail, type StreamChunk, type StreamUsage } from './stream.js';
 import {
   TOOL_DEFINITIONS,
@@ -262,7 +262,7 @@ class Session implements EmbeddedSession {
       });
     } catch (e) {
       if (signal.aborted) throw e;
-      throw new OpenRouterError(`OpenRouter request failed: ${errorMessage(e)}`);
+      throw unreachable(this.opts.baseUrl, e);
     }
   }
 

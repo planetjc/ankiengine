@@ -116,6 +116,16 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
   }
 
   function render(): void {
+    // A key typed but not used yet survives the rebuild below. Use itself
+    // re-renders before it connects, and a new box is empty until the store
+    // answers -- which it never does for a key entered the first time, so
+    // every first OpenRouter key was dropped ("enter an API key first").
+    const typed = new Map<string, string>();
+    let focused: string | null = null;
+    for (const input of host.querySelectorAll<HTMLInputElement>('input[data-key]')) {
+      if (input.value) typed.set(input.dataset.key!, input.value);
+      if (host.ownerDocument.activeElement === input) focused = input.dataset.key!;
+    }
     const main = providers.filter((p) => p.installed || p.kind === 'api' || p.id === state.chosen);
     const install = providers.filter((p) => !main.includes(p) && p.installable);
     const other = providers.filter((p) => !main.includes(p) && !p.installable);
@@ -135,7 +145,12 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
           ? `<strong>${esc(chosen?.name ?? state.chosen)}</strong> is the chosen agent${chosen && !chosen.installed && chosen.kind !== 'api' ? ', but it is not installed here' : ''}.`
           : `<strong>${esc(chosen?.name ?? state.chosen)}</strong> is the chosen agent; it connects when a course folder is chosen.`;
     for (const input of host.querySelectorAll<HTMLInputElement>('input[data-key]')) {
-      void keys.get(input.dataset.key!).then(
+      const id = input.dataset.key!;
+      const kept = typed.get(id);
+      if (kept) input.value = kept;
+      if (id === focused) input.focus();
+      if (kept) continue;
+      void keys.get(id).then(
         (v) => {
           if (v && !input.value) input.value = v;
         },

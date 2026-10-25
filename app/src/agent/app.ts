@@ -888,10 +888,14 @@ export function mountAgentApp(host: EngineHost, opts: AgentAppOptions): AgentApp
   // ---- the agent, as a setting --------------------------------------------------
   function showAgentLine(): void {
     const chosen = remember.get(REMEMBER.agent);
-    const name = chosen ? (picker.nameOf(chosen) ?? chosen) : null;
+    // Connected, the line names the agent that is: choosing another that then
+    // fails to connect leaves the old one connected, and the chosen one's name
+    // beside "connected" said it had.
+    const shownId = connection?.provider ?? chosen;
+    const name = shownId ? (picker.nameOf(shownId) ?? connection?.agent?.name ?? shownId) : null;
     // Said where it is seen every day: an agent is never updated on its own,
     // and Settings is a screen nobody opens once the agent works.
-    const newer = chosen ? picker.updateFor(chosen) : null;
+    const newer = shownId ? picker.updateFor(shownId) : null;
     // Its session opens in a deck's folder, so with none open there is nothing to connect yet.
     const [tone, state]: [Tone, string] = connection
       ? ['on', 'connected']

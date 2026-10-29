@@ -491,7 +491,12 @@ the app loads, checks, renders and exports through `deck/*` on the Node
 engine; the page does it in the tab on sql.js -- so `mountAgentApp` takes a
 `DeckView` and each shell supplies its own (`app/src/main.ts`,
 `site/src/bridge-deck.ts`). The picker takes a `KeyStore` for the same
-reason: the OS keychain on the desktop, `sessionStorage` on the page.
+reason: the OS keychain on the desktop, `sessionStorage` on the page. The
+store is read only when a key-taking agent connects (Use, or the chosen
+agent reconnecting), once, and a stored key is never written back: builds
+are ad-hoc signed, so macOS asks for the login password whenever a build
+it has not seen touches the entry, and drawing the Settings list must not
+ask someone on Claude about an OpenRouter key.
 
 **PDFs are read in the webview.** `pdf-extract.ts` moved to
 `app/src/engine/` unchanged: a Tauri webview has a canvas and a Web Worker

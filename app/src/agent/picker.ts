@@ -8,7 +8,10 @@
 //
 // An API key entered here goes to agent/connect and to the store the shell
 // provides: the OS keychain in the desktop app, sessionStorage on the tool
-// page (this tab, until it closes). Nothing else sees it.
+// page (this tab, until it closes). Nothing else sees it. The store is read
+// only when a key-taking agent connects, never to fill the box: on a Mac a
+// keychain read can ask for the login password, and someone using Claude
+// should never be asked for an OpenRouter key they are not using.
 
 import { EngineError, type ConnectResult, type Provider, type SidecarClient } from '../engine/client.js';
 import type { Bus } from './bus.js';
@@ -69,6 +72,8 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
   let providers: Provider[] = [];
   let pending: ConnectResult | null = null; // a connection waiting on sign-in
   const progress = new Map<string, string[]>();
+  /** Agents whose key this session has read or saved, so the empty box can say one is there. */
+  const saved = new Set<string>();
   const state: PickerState = { chosen: null, connected: null, hasFolder: false };
 
   host.innerHTML = `
@@ -103,7 +108,7 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
     const actions = progress.has(p.id)
       ? ''
       : p.kind === 'api'
-        ? `<input type="password" placeholder="sk-or-…" data-key="${esc(p.id)}" autocomplete="off"><button type="button" data-use="${esc(p.id)}" title="${useTitle}">${useLabel}</button>`
+        ? `<input type="password" placeholder="${saved.has(p.id) ? 'key saved — paste a new one to replace it' : 'sk-or-…'}" title="Left empty, Use takes the key saved on this computer, if there is one" data-key="${esc(p.id)}" autocomplete="off"><button type="button" data-use="${esc(p.id)}" title="${useTitle}">${useLabel}</button>`
         : p.installed
           ? `<button type="button" data-use="${esc(p.id)}" title="${useTitle}">${useLabel}</button>${
               newer ? `<button type="button" data-update="${esc(p.id)}" title="The newer release brings whatever the agent has added since -- for Claude, the newest models.">Update to ${esc(newer)}</button>` : ''
@@ -117,8 +122,7 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
 
   function render(): void {
     // A key typed but not used yet survives the rebuild below. Use itself
-    // re-renders before it connects, and a new box is empty until the store
-    // answers -- which it never does for a key entered the first time, so
+    // re-renders before it connects, and a new box is empty, so without this
     // every first OpenRouter key was dropped ("enter an API key first").
     const typed = new Map<string, string>();
     let focused: string | null = null;
@@ -149,13 +153,6 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
       const kept = typed.get(id);
       if (kept) input.value = kept;
       if (id === focused) input.focus();
-      if (kept) continue;
-      void keys.get(id).then(
-        (v) => {
-          if (v && !input.value) input.value = v;
-        },
-        () => undefined,
-      );
     }
   }
 
@@ -212,7 +209,8 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
       }${result.session ? '<button type="button" data-skip="1" class="quiet">Continue anyway</button>' : ''}</div>`;
   }
 
-  async function connect(id: string): Promise<boolean> {
+  /** `quiet`: a launch-time reconnect, where no saved key is no news, not an error to show. */
+  async function connect(id: string, quiet = false): Promise<boolean> {
     const cwd = courseDir();
     const p = providers.find((x) => x.id === id);
     if (!cwd) {
@@ -221,14 +219,18 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
     }
     const params: { provider: string; dataDir: string; cwd: string; apiKey?: string } = { provider: id, dataDir, cwd };
     if (p?.kind === 'api') {
-      const input = host.querySelector<HTMLInputElement>(`input[data-key="${CSS.escape(id)}"]`);
-      const key = input?.value.trim() || (await keys.get(id).catch(() => null)) || '';
+      // One read of the store, and only when the box is empty; a typed key
+      // is saved, a stored one is not written back (each keychain touch from
+      // a build it does not know can ask for the password again).
+      const typedKey = host.querySelector<HTMLInputElement>(`input[data-key="${CSS.escape(id)}"]`)?.value.trim() ?? '';
+      const key = typedKey || (await keys.get(id).catch(() => null)) || '';
       if (!key) {
-        cb.say('enter an API key first', true);
+        if (!quiet) cb.say('enter an API key first', true);
         return false;
       }
       params.apiKey = key;
-      await keys.set(id, key).catch(() => undefined);
+      if (typedKey) await keys.set(id, typedKey).catch(() => undefined);
+      saved.add(id);
     }
     cb.say(`connecting ${p?.name ?? id}…`);
     cb.onPhase?.('connecting');
@@ -331,8 +333,7 @@ export function mountPicker(host: HTMLElement, sidecar: SidecarClient, bus: Bus,
       await loaded;
       const p = providers.find((x) => x.id === id);
       if (!p || (!p.installed && p.kind !== 'api')) return false;
-      if (p.kind === 'api' && !(await keys.get(id).catch(() => null))) return false;
-      return connect(id);
+      return connect(id, true);
     },
     setState(s) {
       Object.assign(state, s);
